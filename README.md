@@ -27,8 +27,8 @@ Ein professionelles Briefing- und Debriefing-Tool für 4-Way Formation Skydiving
 ## 🎯 Überblick
 
 Das System besteht aus zwei aufeinander abgestimmten Anwendungen:
-1. **`scoring.py`**: Interaktives Debriefing-, Video- und Wertungstool mit genauer Zeiterfassung, Frame-by-Frame-Steuerung, Telestration und Leistungsstatistiken.
-2. **`formation_tool.py`**: Interaktiver 3D Formation Explorer zur dreidimensionalen Visualisierung des FAI Dive Pools, Head Switches, Griffverbindungen (Grips) und Key-Zuordnungen.
+1. **`src/scoring.py`** (oder via `run.py`): Interaktives Debriefing-, Video- und Wertungstool mit genauer Zeiterfassung, Frame-by-Frame-Steuerung, Telestration und Leistungsstatistiken.
+2. **`src/formation_tool.py`** (oder via `run.py --3d`): Interaktiver 3D Formation Explorer zur dreidimensionalen Visualisierung des FAI Dive Pools, Head Switches, Griffverbindungen (Grips) und Key-Zuordnungen.
 
 ---
 
@@ -221,17 +221,28 @@ Um den Workflow beim Laden von GoPro-Footage und Debriefing-Videos maximal zu be
 
 ```
 4wayscoring/
-├── scoring.py               # Hauptanwendung: Debriefing, Videoplayer, Trimmer & Scoring
-├── formation_tool.py        # 3D Formation Explorer & Visualizer
-├── formation_db.py          # FAI 4-Way Dive Pool Datenbank (Randoms A-Q, Blöcke 1-22)
-├── 4way_knowledge_base.md   # Wissensdatenbank: FAI Regeln, Griffdefinitionen, Key-Prinzipien
-├── 4way.md                  # Projektnotizen und Architektur-Übersicht
-├── todo.md                  # Anforderungskatalog
-├── 4wayCheatSheet.svg       # Visuelle Übersicht aller Formationen
-├── 4way-Randoms-Only.pdf    # FAI Pool Übersicht Randoms
-├── 4way-Blocks-Only.pdf     # FAI Pool Übersicht Blöcke
-├── AlternateEngineering.pdf # Block-Technik Referenz
-└── README.md                # Projektdokumentation
+├── run.py                      # Zentraler Starter (Debriefing Tool oder 3D Explorer)
+├── src/                        # Python Quellcode
+│   ├── scoring.py              # Hauptanwendung: Debriefing, Videoplayer, Trimmer & Scoring
+│   ├── formation_tool.py       # 3D Formation Explorer & Visualizer
+│   ├── formation_db.py         # FAI 4-Way Dive Pool Datenbank (Randoms A-Q, Blöcke 1-22)
+│   └── __init__.py
+├── docs/                       # Dokumentation & Regelwerke
+│   ├── 4way_knowledge_base.md  # FAI Regeln, Griffdefinitionen, Key-Prinzipien
+│   ├── 4way.md                 # Projektnotizen und Architektur-Übersicht
+│   └── pdf/                    # FAI Regelwerke & Technik-Guides (PDFs)
+│       ├── 4way-Blocks-Only.pdf
+│       ├── 4way-Randoms-Only.pdf
+│       └── AlternateEngineering.pdf
+├── assets/                     # Grafiken & Medien
+│   └── 4wayCheatSheet.svg      # Visuelle Übersicht aller Formationen
+├── debriefs/                   # Lokale Debriefing-Dateien (vom Git-Repo ausgeschlossen)
+│   ├── README.md               # Erklärung des Ordners
+│   ├── *_debrief.json          # Gespeicherte Wertungs-Sessions
+│   └── *_report.md             # Exportierte Debrief-Berichte
+├── todo.md                     # Anforderungs- und Aufgabenkatalog
+├── .gitignore                  # Git-Ausschlussregeln
+└── README.md                   # Projektdokumentation
 ```
 
 ---
@@ -260,11 +271,22 @@ pip install PyQt6 python-mpv
 
 ### Debriefing & Scoring Tool starten:
 ```bash
-python3 scoring.py
+# Bequem über den Root-Starter:
+python3 run.py
+
+# Oder direkt aus dem Quellordner:
+python3 src/scoring.py
 ```
 
-### 3D Formation Explorer direkt starten:
+### 3D Formation Explorer starten:
 ```bash
-python3 formation_tool.py
+# Über den Starter (Standard: Formation 21):
+python3 run.py --3d
+
+# Gezielt mit einer bestimmten Formation (z.B. Block 12):
+python3 run.py --3d 12
+
+# Oder direkt:
+python3 src/formation_tool.py 12
 ```
-*(Der 3D Explorer kann auch jederzeit direkt aus `scoring.py` über den Button **`🎯 3D Formationen...`** geöffnet werden.)*
+*(Der 3D Explorer kann auch jederzeit direkt aus dem Scoring-Tool über den Button **`🎯 3D Formationen...`** geöffnet werden.)*

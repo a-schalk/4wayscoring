@@ -35,3 +35,10 @@ ENV/
 
 # Temporary videos
 *.tmp
+
+# Debrief sessions and reports
+debriefs/*
+!debriefs/README.md
+!debriefs/.gitkeep
+*_debrief.json
+*_report.md

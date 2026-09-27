@@ -3528,9 +3528,23 @@ class DebriefMainWindow(QMainWindow):
     # -----------------------------------------------------------------
     # Session Persistence & Debrief Report Export
     # -----------------------------------------------------------------
+    def _get_debriefs_dir(self) -> str:
+        """Liefert den Pfad zum debriefs/-Ordner, falls vorhanden."""
+        curr = os.path.dirname(os.path.abspath(__file__))
+        root = os.path.dirname(curr)
+        candidate = os.path.join(root, "debriefs")
+        if os.path.isdir(candidate):
+            return candidate
+        candidate_curr = os.path.join(curr, "debriefs")
+        if os.path.isdir(candidate_curr):
+            return candidate_curr
+        return ""
+
     def _save_session_file(self):
         default_name = f"{self.session.jump_name.replace(' ', '_')}_debrief.json"
-        path, _ = QFileDialog.getSaveFileName(self, "Debriefing Session speichern", default_name, "JSON Files (*.json)")
+        deb_dir = self._get_debriefs_dir()
+        init_path = os.path.join(deb_dir, default_name) if deb_dir else default_name
+        path, _ = QFileDialog.getSaveFileName(self, "Debriefing Session speichern", init_path, "JSON Files (*.json)")
         if path:
             try:
                 with open(path, "w", encoding="utf-8") as f:
@@ -3540,7 +3554,8 @@ class DebriefMainWindow(QMainWindow):
                 QMessageBox.critical(self, "Fehler", f"Konnte Datei nicht speichern:\n{e}")
 
     def _load_session_file(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Debriefing Session laden", "", "JSON Files (*.json)")
+        deb_dir = self._get_debriefs_dir()
+        path, _ = QFileDialog.getOpenFileName(self, "Debriefing Session laden", deb_dir, "JSON Files (*.json)")
         if path:
             try:
                 with open(path, "r", encoding="utf-8") as f:
@@ -3643,7 +3658,10 @@ class DebriefMainWindow(QMainWindow):
         dlg.exec()
 
     def _save_report_to_file(self, text: str):
-        path, _ = QFileDialog.getSaveFileName(self, "Report speichern", f"{self.session.jump_name}_report.md", "Markdown (*.md);;Text (*.txt)")
+        default_name = f"{self.session.jump_name}_report.md"
+        deb_dir = self._get_debriefs_dir()
+        init_path = os.path.join(deb_dir, default_name) if deb_dir else default_name
+        path, _ = QFileDialog.getSaveFileName(self, "Report speichern", init_path, "Markdown (*.md);;Text (*.txt)")
         if path:
             try:
                 with open(path, "w", encoding="utf-8") as f:
@@ -3673,7 +3691,7 @@ class DebriefMainWindow(QMainWindow):
 # Application Entry Point
 # =====================================================================
 
-if __name__ == "__main__":
+def main():
     app = QApplication(sys.argv)
     try:
         locale.setlocale(locale.LC_NUMERIC, 'C')
@@ -3682,3 +3700,7 @@ if __name__ == "__main__":
     window = DebriefMainWindow()
     window.show()
     sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()
