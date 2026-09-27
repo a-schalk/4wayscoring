@@ -30,7 +30,7 @@ try:
 except Exception:
     pass
 
-from PyQt6.QtCore import Qt, QPoint, QPointF, QRectF, pyqtSignal, QObject, QTimer, QProcess, QEvent
+from PyQt6.QtCore import Qt, QPoint, QPointF, QRectF, pyqtSignal, QObject, QTimer, QProcess, QEvent, QSettings, QUrl
 from PyQt6.QtGui import (
     QPainter, QPen, QColor, QFont, QBrush, QPolygonF, QPainterPath,
     QKeySequence, QShortcut, QAction, QIcon
@@ -41,7 +41,7 @@ from PyQt6.QtWidgets import (
     QFileDialog, QHeaderView, QSplitter, QButtonGroup, QRadioButton,
     QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QProgressBar,
     QMessageBox, QDialog, QTextEdit, QPlainTextEdit, QFrame, QGroupBox, QToolTip,
-    QCheckBox, QAbstractItemView, QMenu
+    QCheckBox, QAbstractItemView, QMenu, QListWidget, QListWidgetItem
 )
 
 try:
@@ -1093,6 +1093,183 @@ class DivePoolDialog(QDialog):
 
 
 # =====================================================================
+# Video-Pfade, Standard-Ordner & Quick Links Dialog
+# =====================================================================
+
+def find_connected_camera_folders() -> List[str]:
+    """Sucht nach typischen Mount-Pfaden für angeschlossene Kameras/SD-Karten (GoPro etc.)"""
+    found = []
+    user = os.environ.get("USER", "")
+    scan_bases = [
+        f"/media/{user}",
+        f"/run/media/{user}",
+        "/media",
+        "/mnt",
+    ]
+    subpaths = ["DCIM/100GOPRO", "DCIM", ""]
+    for base in scan_bases:
+        if os.path.isdir(base):
+            try:
+                for entry in os.listdir(base):
+                    full_entry = os.path.join(base, entry)
+                    if os.path.isdir(full_entry):
+                        for sp in subpaths:
+                            candidate = os.path.join(full_entry, sp) if sp else full_entry
+                            if os.path.isdir(candidate) and candidate not in found:
+                                try:
+                                    files = os.listdir(candidate)[:20]
+                                    if "DCIM" in candidate or any("GOPR" in f.upper() or f.upper().endswith(".MP4") for f in files):
+                                        found.append(candidate)
+                                except Exception:
+                                    pass
+            except Exception:
+                pass
+    return found
+
+
+class VideoPathsDialog(QDialog):
+    """Dialog zur Konfiguration des Standard-Video-Ordners und Quick-Links / Favoriten."""
+    def __init__(self, main_window: 'DebriefMainWindow'):
+        super().__init__(main_window)
+        self.mw = main_window
+        self.setWindowTitle("⚙️ Video-Ordner & Quick Links konfigurieren")
+        self.resize(640, 500)
+        self._init_ui()
+
+    def _init_ui(self):
+        layout = QVBoxLayout(self)
+
+        # 1. Standard-Ordner
+        grp_def = QGroupBox("Standard-Ordner (Default Video Directory)")
+        l_def = QVBoxLayout(grp_def)
+        lbl_def = QLabel("Dieser Ordner wird standardmäßig geöffnet, wenn Sie auf 'Video laden' klicken:")
+        lbl_def.setStyleSheet("color: #888888; font-size: 11px;")
+        l_def.addWidget(lbl_def)
+
+        row_def = QHBoxLayout()
+        self.txt_default = QLineEdit(self.mw.get_default_video_dir())
+        self.txt_default.setReadOnly(True)
+        btn_browse_def = QPushButton("📂 Auswählen...")
+        btn_browse_def.clicked.connect(self._browse_default_dir)
+        btn_reset_def = QPushButton("↺ Standard (~/Videos)")
+        btn_reset_def.setToolTip("Auf Standard ~/Videos zurücksetzen")
+        btn_reset_def.clicked.connect(self._reset_default_dir)
+        row_def.addWidget(self.txt_default, 1)
+        row_def.addWidget(btn_browse_def)
+        row_def.addWidget(btn_reset_def)
+        l_def.addLayout(row_def)
+        layout.addWidget(grp_def)
+
+        # 2. Quick Links / Favoriten
+        grp_ql = QGroupBox("Quick Links / Favoriten-Ordner")
+        l_ql = QVBoxLayout(grp_ql)
+        lbl_ql = QLabel(
+            "Diese Ordner erscheinen direkt in der Seitenleiste des Dateidialogs und im Menü '⚡ Quick Links':"
+        )
+        lbl_ql.setStyleSheet("color: #888888; font-size: 11px;")
+        l_ql.addWidget(lbl_ql)
+
+        self.list_links = QListWidget()
+        for path in self.mw.get_quick_link_dirs():
+            self._add_list_item(path)
+        l_ql.addWidget(self.list_links)
+
+        row_ql_btns = QHBoxLayout()
+        btn_add = QPushButton("➕ Ordner hinzufügen...")
+        btn_add.clicked.connect(self._add_quick_link)
+        btn_remove = QPushButton("➖ Entfernen")
+        btn_remove.clicked.connect(self._remove_quick_link)
+        btn_scan = QPushButton("🔍 GoPro / SD-Karte suchen")
+        btn_scan.setStyleSheet("background-color: #0284c7; color: white;")
+        btn_scan.setToolTip("Automatisch nach eingesteckten SD-Karten oder GoPro DCIM-Ordnern suchen")
+        btn_scan.clicked.connect(self._scan_cameras)
+
+        row_ql_btns.addWidget(btn_add)
+        row_ql_btns.addWidget(btn_remove)
+        row_ql_btns.addWidget(btn_scan)
+        row_ql_btns.addStretch()
+        l_ql.addLayout(row_ql_btns)
+        layout.addWidget(grp_ql, 1)
+
+        # Bottom Buttons
+        row_actions = QHBoxLayout()
+        row_actions.addStretch()
+        btn_save = QPushButton("💾 Speichern")
+        btn_save.setStyleSheet("background-color: #2e7d32; color: white; font-weight: bold; padding: 6px 14px;")
+        btn_save.clicked.connect(self._save_and_close)
+        btn_cancel = QPushButton("Abbrechen")
+        btn_cancel.clicked.connect(self.reject)
+        row_actions.addWidget(btn_save)
+        row_actions.addWidget(btn_cancel)
+        layout.addLayout(row_actions)
+
+    def _add_list_item(self, path: str):
+        if not path or not os.path.isdir(path):
+            return
+        for i in range(self.list_links.count()):
+            if self.list_links.item(i).text() == path:
+                return
+        item = QListWidgetItem(path)
+        item.setToolTip(path)
+        self.list_links.addItem(item)
+
+    def _browse_default_dir(self):
+        curr = self.txt_default.text() or os.path.expanduser("~")
+        chosen = QFileDialog.getExistingDirectory(self, "Standard Video-Ordner wählen", curr)
+        if chosen:
+            self.txt_default.setText(chosen)
+
+    def _reset_default_dir(self):
+        vid_dir = os.path.expanduser("~/Videos")
+        if not os.path.isdir(vid_dir):
+            vid_dir = os.path.expanduser("~")
+        self.txt_default.setText(vid_dir)
+
+    def _add_quick_link(self):
+        curr = self.txt_default.text() or os.path.expanduser("~")
+        chosen = QFileDialog.getExistingDirectory(self, "Quick Link Ordner hinzufügen", curr)
+        if chosen:
+            self._add_list_item(chosen)
+
+    def _remove_quick_link(self):
+        row = self.list_links.currentRow()
+        if row >= 0:
+            self.list_links.takeItem(row)
+
+    def _scan_cameras(self):
+        found = find_connected_camera_folders()
+        if not found:
+            QMessageBox.information(
+                self, "Kamera-Suche",
+                "Keine eingesteckten GoPro / SD-Karten unter /media oder /run/media gefunden.\n\n"
+                "Stellen Sie sicher, dass die SD-Karte oder Kamera gemountet ist."
+            )
+            return
+        added = 0
+        for f in found:
+            exists = any(self.list_links.item(i).text() == f for i in range(self.list_links.count()))
+            if not exists:
+                self._add_list_item(f)
+                added += 1
+        if added > 0:
+            QMessageBox.information(self, "Kamera gefunden", f"{added} Kamera-/SD-Karten-Ordner zu Quick Links hinzugefügt!")
+        else:
+            QMessageBox.information(self, "Kamera gefunden", "Gefundene Kamera-Ordner sind bereits in der Quick Links Liste.")
+
+    def _save_and_close(self):
+        def_dir = self.txt_default.text().strip()
+        if def_dir and os.path.isdir(def_dir):
+            self.mw.set_default_video_dir(def_dir)
+
+        links = []
+        for i in range(self.list_links.count()):
+            links.append(self.list_links.item(i).text())
+        self.mw.set_quick_link_dirs(links)
+
+        self.accept()
+
+
+# =====================================================================
 # Programmglobaler Shortcut EventFilter
 # =====================================================================
 
@@ -1155,6 +1332,7 @@ class DebriefMainWindow(QMainWindow):
 
         self.session = JumpSession()
         self.fps = 30.0
+        self.settings = QSettings("4WayScoring", "DebriefApp")
 
         # Status für temporäre Event-Erfassung
         self.pending_complete_time: Optional[float] = None
@@ -1230,6 +1408,11 @@ class DebriefMainWindow(QMainWindow):
         btn_export_report.clicked.connect(self._export_debrief_report)
         header_layout.addWidget(btn_export_report)
 
+        btn_settings = QPushButton("⚙️ Pfade & Ordner...")
+        btn_settings.setToolTip("Standard-Video-Ordner und Quick-Links / Favoriten konfigurieren")
+        btn_settings.clicked.connect(self._open_video_paths_dialog)
+        header_layout.addWidget(btn_settings)
+
         main_layout.addWidget(header_bar)
 
         # Sequence Chips Display Bar
@@ -1267,6 +1450,12 @@ class DebriefMainWindow(QMainWindow):
         self.btn_load_raw.setToolTip("Hauptkamera / GoPro Video 1 laden")
         self.btn_load_raw.clicked.connect(self._open_raw_video)
         trim_layout.addWidget(self.btn_load_raw)
+
+        self.btn_quick_links = QPushButton("⚡ Quick Links ▾")
+        self.btn_quick_links.setStyleSheet("background-color: #0369a1; color: white; font-size: 11px;")
+        self.btn_quick_links.setToolTip("Schnellzugriff auf Favoriten-Ordner & zuletzt geöffnete Videos")
+        self.btn_quick_links.clicked.connect(self._show_quick_links_menu)
+        trim_layout.addWidget(self.btn_quick_links)
 
         trim_layout.addSpacing(10)
         trim_layout.addWidget(QLabel("<b>Trimmer:</b>"))
@@ -2115,29 +2304,161 @@ class DebriefMainWindow(QMainWindow):
         self.container2.overlay.clear_drawings()
 
     # -----------------------------------------------------------------
+    # Video-Pfade, Standard-Ordner & Quick Links
+    # -----------------------------------------------------------------
+    def get_default_video_dir(self) -> str:
+        d = self.settings.value("paths/default_video_dir", "")
+        if d and os.path.isdir(str(d)):
+            return str(d)
+        vid_dir = os.path.expanduser("~/Videos")
+        if os.path.isdir(vid_dir):
+            return vid_dir
+        return os.path.expanduser("~")
+
+    def set_default_video_dir(self, directory: str):
+        if directory and os.path.isdir(directory):
+            self.settings.setValue("paths/default_video_dir", directory)
+            self.settings.sync()
+
+    def get_quick_link_dirs(self) -> List[str]:
+        raw = self.settings.value("paths/quick_links", [])
+        if isinstance(raw, str):
+            res = [p.strip() for p in raw.split(";") if p.strip()]
+        elif isinstance(raw, list):
+            res = [str(p) for p in raw if p]
+        else:
+            res = []
+        return [p for p in res if os.path.isdir(p)]
+
+    def set_quick_link_dirs(self, dirs: List[str]):
+        clean = [p for p in dirs if p and os.path.isdir(p)]
+        self.settings.setValue("paths/quick_links", clean)
+        self.settings.sync()
+
+    def get_recent_videos(self) -> List[str]:
+        raw = self.settings.value("paths/recent_videos", [])
+        if isinstance(raw, str):
+            res = [p.strip() for p in raw.split(";") if p.strip()]
+        elif isinstance(raw, list):
+            res = [str(p) for p in raw if p]
+        else:
+            res = []
+        return [p for p in res if os.path.isfile(p)]
+
+    def add_recent_video(self, file_path: str):
+        if not file_path or not os.path.isfile(file_path):
+            return
+        recents = self.get_recent_videos()
+        if file_path in recents:
+            recents.remove(file_path)
+        recents.insert(0, file_path)
+        recents = recents[:12]
+        self.settings.setValue("paths/recent_videos", recents)
+        self.settings.sync()
+
+    def _open_video_paths_dialog(self):
+        dlg = VideoPathsDialog(self)
+        dlg.exec()
+
+    def _choose_video_file(self, title: str) -> Optional[str]:
+        """Öffnet Dateidialog mit konfiguriertem Default-Ordner und Quick Links in der Seitenleiste."""
+        start_dir = self.get_default_video_dir()
+        dlg = QFileDialog(self, title, start_dir, "Video Files (*.mp4 *.MP4 *.mov *.MOV *.mkv *.avi)")
+        dlg.setFileMode(QFileDialog.FileMode.ExistingFile)
+
+        # Quick Links als Sidebar URLs in den Dateidialog einhängen
+        quick_urls = [QUrl.fromLocalFile(p) for p in self.get_quick_link_dirs()]
+        existing = dlg.sidebarUrls()
+        dlg.setSidebarUrls(quick_urls + [u for u in existing if u not in quick_urls])
+
+        if dlg.exec():
+            selected = dlg.selectedFiles()
+            if selected:
+                chosen = selected[0]
+                self.add_recent_video(chosen)
+                return chosen
+        return None
+
+    def _show_quick_links_menu(self):
+        """Dropdown-Menü für schnellen Ordner- & Video-Zugriff."""
+        menu = QMenu(self)
+
+        links = self.get_quick_link_dirs()
+        if links:
+            menu.addSection("⭐ Quick-Link Ordner")
+            for path in links:
+                act = menu.addAction(f"📂 {os.path.basename(path)}  ({path})")
+                def _open_in_dir(p=path):
+                    dlg = QFileDialog(self, f"Video wählen in {p}", p, "Video Files (*.mp4 *.MP4 *.mov *.MOV *.mkv *.avi)")
+                    dlg.setFileMode(QFileDialog.FileMode.ExistingFile)
+                    quick_urls = [QUrl.fromLocalFile(q) for q in self.get_quick_link_dirs()]
+                    existing = dlg.sidebarUrls()
+                    dlg.setSidebarUrls(quick_urls + [u for u in existing if u not in quick_urls])
+                    if dlg.exec():
+                        sel = dlg.selectedFiles()
+                        if sel:
+                            self._load_selected_video1(sel[0])
+                act.triggered.connect(_open_in_dir)
+
+        recents = self.get_recent_videos()
+        if recents:
+            menu.addSection("🕒 Zuletzt geöffnete Videos")
+            for r in recents[:8]:
+                act = menu.addAction(f"🎬 {os.path.basename(r)}")
+                act.setToolTip(r)
+                act.triggered.connect(lambda checked=False, p=r: self._load_selected_video1(p))
+
+        menu.addSeparator()
+        act_scan = menu.addAction("🔍 Nach GoPro / SD-Karte suchen...")
+        def _scan_and_show():
+            found = find_connected_camera_folders()
+            if found:
+                curr = self.get_quick_link_dirs()
+                added = 0
+                for f in found:
+                    if f not in curr:
+                        curr.append(f)
+                        added += 1
+                if added > 0:
+                    self.set_quick_link_dirs(curr)
+                    QMessageBox.information(self, "Kamera gefunden", f"{added} Kamera-/SD-Karten-Ordner zu Quick Links hinzugefügt!")
+                else:
+                    QMessageBox.information(self, "Kamera gefunden", "Gefundene Kamera-Ordner sind bereits in den Quick Links.")
+            else:
+                QMessageBox.information(self, "Kamera-Suche", "Keine GoPro / SD-Karte unter /media oder /run/media gefunden.")
+        act_scan.triggered.connect(_scan_and_show)
+
+        act_settings = menu.addAction("⚙️ Pfade & Quick Links konfigurieren...")
+        act_settings.triggered.connect(self._open_video_paths_dialog)
+
+        menu.exec(self.btn_quick_links.mapToGlobal(QPoint(0, self.btn_quick_links.height())))
+
+    # -----------------------------------------------------------------
     # Video Loading & Trimming (GoPro Cutter)
     # -----------------------------------------------------------------
     def _open_raw_video(self):
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Cam 1 Video (Hauptkamera) wählen", "", "Video Files (*.mp4 *.MP4 *.mov *.MOV *.mkv *.avi)"
-        )
+        path = self._choose_video_file("Cam 1 Video (Hauptkamera) wählen")
         if path:
-            self.session.video_path = path
-            self.container1.mpv_widget.load_video(path)
-            self.session.in_point = None
-            self.session.out_point = None
-            self._update_in_out_labels()
-            self.timeline_widget.set_in_out(None, None)
-            fname = os.path.basename(path)
-            if hasattr(self, 'btn_load_raw'):
-                self.btn_load_raw.setText(f"📹 Cam 1: {fname[:12]}...")
-            if hasattr(self, 'lbl_cam1_title'):
-                self.lbl_cam1_title.setText(f"📹 <b>Cam 1:</b> {fname}")
+            self._load_selected_video1(path)
+
+    def _load_selected_video1(self, path: str):
+        if not path or not os.path.exists(path):
+            return
+        self.session.video_path = path
+        self.container1.mpv_widget.load_video(path)
+        self.session.in_point = None
+        self.session.out_point = None
+        self._update_in_out_labels()
+        self.timeline_widget.set_in_out(None, None)
+        fname = os.path.basename(path)
+        if hasattr(self, 'btn_load_raw'):
+            self.btn_load_raw.setText(f"📹 Cam 1: {fname[:12]}...")
+        if hasattr(self, 'lbl_cam1_title'):
+            self.lbl_cam1_title.setText(f"📹 <b>Cam 1:</b> {fname}")
+        self.add_recent_video(path)
 
     def _open_cam2_video(self):
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Cam 2 Video (Zweitkamera) wählen", "", "Video Files (*.mp4 *.MP4 *.mov *.MOV *.mkv *.avi)"
-        )
+        path = self._choose_video_file("Cam 2 Video (Zweitkamera) wählen")
         if path:
             self.session.video_path_cam2 = path
             self.container2.mpv_widget.load_video(path)
@@ -2159,6 +2480,7 @@ class DebriefMainWindow(QMainWindow):
             if hasattr(self, 'lbl_cam2_title'):
                 self.lbl_cam2_title.setText(f"📹 <b>Cam 2:</b> {fname}")
             self.sync_overlays()
+            self.add_recent_video(path)
 
     def _mark_in_point(self):
         t = self.container1.mpv_widget.get_time()
@@ -2232,6 +2554,12 @@ class DebriefMainWindow(QMainWindow):
         self.session.out_point = None
         self._update_in_out_labels()
         self.timeline_widget.set_in_out(None, None)
+        fname = os.path.basename(output_path)
+        if hasattr(self, 'btn_load_raw'):
+            self.btn_load_raw.setText(f"📹 Cam 1: {fname[:12]}...")
+        if hasattr(self, 'lbl_cam1_title'):
+            self.lbl_cam1_title.setText(f"📹 <b>Cam 1:</b> {fname}")
+        self.add_recent_video(output_path)
         QMessageBox.information(
             self, "Schnitt Erfolgreich",
             f"Das geschnittene Sprungvideo wurde erfolgreich erstellt und für das Debriefing geladen:\n{os.path.basename(output_path)}"

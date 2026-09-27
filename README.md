@@ -17,6 +17,7 @@ Ein professionelles Briefing- und Debriefing-Tool für 4-Way Formation Skydiving
   - [7. Debrief Analytics & Report-Export](#7-debrief-analytics--report-export)
 - [Programmglobale Tastaturkürzel](#-programmglobale-tastaturkürzel)
 - [Anleitung: Dual Cam Modus](#-anleitung-dual-cam-modus)
+- [Standard-Ordner & Quick Links (Favoriten)](#-standard-ordner--quick-links-favoriten)
 - [Projektstruktur](#-projektstruktur)
 - [Installation & Voraussetzungen](#-installation--voraussetzungen)
 - [Starten der Anwendungen](#-starten-der-anwendungen)
@@ -138,6 +139,32 @@ Der Dual Cam Modus ermöglicht die parallele, synchrone Betrachtung zweier Kamer
    - Das zweite Video synchronisiert sich beim Laden automatisch auf die aktuelle Position und den Play/Pause-Status von Cam 1.
    - Alle Shortcuts (`Leertaste`, Einzelbild-Stepping etc.) steuern beide Videos parallel synchron an.
    - Der Pfad zu Cam 2 wird beim Speichern der Session (`Strg+S`) automatisch mitgesichert und beim Laden (`Strg+O`) direkt wiederhergestellt.
+
+---
+
+## 📂 Standard-Ordner & Quick Links (Favoriten)
+
+Um den Workflow beim Laden von GoPro-Footage und Debriefing-Videos maximal zu beschleunigen, bietet das Tool konfigurierbare Pfade und Quick-Links:
+
+### 1. Konfigurations-Dialog (`⚙️ Pfade & Ordner...`)
+- Klicke im oberen Header-Bereich auf **`⚙️ Pfade & Ordner...`** (oder im Dropdown-Menü **`⚡ Quick Links ▾`** auf *Pfade & Quick Links konfigurieren*).
+- **Standard-Ordner (Default Video Directory):**
+  - Legt fest, welches Verzeichnis der Dateidialog beim Klick auf `Video 1 laden...` oder `Video 2 wählen...` automatisch öffnet.
+  - Standardmäßig auf `~/Videos` voreingestellt.
+  - Kann über **`📂 Auswählen...`** frei angepasst oder mit **`↺ Standard`** zurückgesetzt werden.
+- **Quick Links / Favoriten-Ordner:**
+  - Füge über **`➕ Ordner hinzufügen...`** beliebige Verzeichnisse (z.B. Dropzone-Ordner, Team-Trainings, Saison-Archive) hinzu.
+  - Diese Ordner erscheinen **automatisch als Lesezeichen in der linken Seitenleiste** jedes Qt-Dateidialogs.
+  - Mit **`➖ Entfernen`** können Einträge wieder gelöscht werden.
+- **Automatische SD-Karten-Erkennung:**
+  - Klicke auf **`🔍 GoPro / SD-Karte suchen`**. Das System durchsucht typische Linux-Mount-Pfade (`/media/$USER/.../DCIM`, `/run/media/...`) und fügt gefundene Kameras direkt zu den Quick Links hinzu.
+- Alle Einstellungen werden dauerhaft in der Benutzerkonfiguration (`QSettings`) gespeichert.
+
+### 2. Dropdown-Schnellzugriff (`⚡ Quick Links ▾`)
+- Direkt neben dem Button `📹 Video 1 laden...` befindet sich das Schnellmenü **`⚡ Quick Links ▾`**:
+  - **Quick-Link Ordner:** Klick öffnet den Dateidialog direkt im gewählten Verzeichnis.
+  - **Zuletzt geöffnete Videos:** Listet die letzten Videos auf – ein Klick lädt das Video sofort, ohne Umweg über einen Dateidialog.
+  - **GoPro / SD-Karte suchen:** Schneller Scan nach frisch eingesteckten Speicherkarten.
 
 ---
 
