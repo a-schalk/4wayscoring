@@ -227,7 +227,11 @@ Um den Workflow beim Laden von GoPro-Footage und Debriefing-Videos maximal zu be
 │   ├── formation_tool.py       # 3D Formation Explorer & Visualizer
 │   ├── formation_db.py         # FAI 4-Way Dive Pool Datenbank (Randoms A-Q, Blöcke 1-22)
 │   └── __init__.py
-├── docs/                       # Dokumentation & Regelwerke
+├── tests/                      # Schnelle Headless-Testsuite (<0.3s)
+│   └── run_tests.py            # Automatisierter Test-Runner
+├── docs/                       # Dokumentation & Wissensdatenbank
+│   ├── CODE_MAP.md             # Code-Symbolindex & Zeilenbereiche (Token-Optimierung)
+│   ├── KNOWLEDGE_BASE.md       # FAI Dive Pool & Wertungsregeln Referenz-Hub
 │   ├── 4way_knowledge_base.md  # FAI Regeln, Griffdefinitionen, Key-Prinzipien
 │   ├── 4way.md                 # Projektnotizen und Architektur-Übersicht
 │   └── pdf/                    # FAI Regelwerke & Technik-Guides (PDFs)
@@ -240,6 +244,8 @@ Um den Workflow beim Laden von GoPro-Footage und Debriefing-Videos maximal zu be
 │   ├── README.md               # Erklärung des Ordners
 │   ├── *_debrief.json          # Gespeicherte Wertungs-Sessions
 │   └── *_report.md             # Exportierte Debrief-Berichte
+├── AGENTS.md                   # Agentic Development Guide & Instruktionen
+├── SESSION_STATE.md            # Aktueller Session-Status & Kontext-Wiederherstellung
 ├── todo.md                     # Anforderungs- und Aufgabenkatalog
 ├── .gitignore                  # Git-Ausschlussregeln
 └── README.md                   # Projektdokumentation
