@@ -14,6 +14,7 @@ PROJECT_ROOT = os.path.dirname(CURRENT_DIR)
 ASSETS_CARDS_DIR = os.path.join(PROJECT_ROOT, "assets", "cards")
 RANDOMS_DIR = os.path.join(ASSETS_CARDS_DIR, "randoms")
 BLOCKS_DIR = os.path.join(ASSETS_CARDS_DIR, "blocks")
+CONTINUITY_DIR = os.path.join(ASSETS_CARDS_DIR, "continuity")
 
 
 def get_card_path(code: str) -> Optional[str]:
@@ -57,6 +58,54 @@ def get_card_path(code: str) -> Optional[str]:
 def get_card_pixmap(code: str, max_width: int = 180, max_height: int = 180) -> Optional[QPixmap]:
     """Returns a scaled QPixmap for the given formation code."""
     path = get_card_path(code)
+    if not path or not os.path.isfile(path):
+        return None
+    pix = QPixmap(path)
+    if pix.isNull():
+        return None
+    return pix.scaled(
+        max_width, max_height,
+        aspectRatioMode=Qt.AspectRatioMode.KeepAspectRatio,
+        transformMode=Qt.TransformationMode.SmoothTransformation
+    )
+
+
+def get_continuity_strip_path(code: str, vertical: bool = False) -> Optional[str]:
+    """
+    Returns the path to the official Rhythm XP Continuity Booklet strip.
+    For Blocks: full strip showing initial build, inter picture(s) with degree arrows, closing build, and key arrow.
+    For Randoms: the individual Random formation card.
+    """
+    clean = re.sub(r'[-._].*$', '', code.strip()).upper()
+    if not clean:
+        return None
+
+    if clean.isdigit():
+        # Check if block has vertical variant
+        if vertical:
+            vert_path = os.path.join(CONTINUITY_DIR, f"block_{clean}_vert.png")
+            if os.path.isfile(vert_path):
+                return vert_path
+        # Check flat variant
+        flat_path = os.path.join(CONTINUITY_DIR, f"block_{clean}_flat.png")
+        if os.path.isfile(flat_path):
+            return flat_path
+        # Standard block
+        std_path = os.path.join(CONTINUITY_DIR, f"block_{clean}.png")
+        if os.path.isfile(std_path):
+            return std_path
+        # Fallback to regular block card
+        return get_card_path(clean)
+    else:
+        # Random formation
+        return get_card_path(clean)
+
+
+def get_continuity_strip_pixmap(
+    code: str, vertical: bool = False, max_width: int = 350, max_height: int = 900
+) -> Optional[QPixmap]:
+    """Returns a scaled QPixmap for the Rhythm XP Continuity Booklet strip."""
+    path = get_continuity_strip_path(code, vertical=vertical)
     if not path or not os.path.isfile(path):
         return None
     pix = QPixmap(path)

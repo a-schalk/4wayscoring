@@ -71,12 +71,12 @@ class FormationDefinition:
     slot_details: Dict[str, SlotDetail] = field(default_factory=dict)
 
 
-# Standard Colors
-COLOR_POINT = "#EF4444"    # Red
-COLOR_OC = "#3B82F6"       # Blue
-COLOR_IC = "#EAB308"       # Yellow / Gold
-COLOR_TAIL = "#22C55E"     # Green
-COLOR_VIDEO = "#A855F7"    # Purple
+# Standard SDC Rhythm XP Colors (as shown in Continuity Booklet)
+COLOR_POINT = "#EF4444"    # Red (Point)
+COLOR_OC = "#10B981"       # Green (Outside Center)
+COLOR_IC = "#3B82F6"       # Blue (Inside Center)
+COLOR_TAIL = "#EAB308"     # Yellow (Tail)
+COLOR_VIDEO = "#A855F7"    # Purple (Videographer)
 
 
 def _build_dive_pool() -> Dict[str, FormationDefinition]:
@@ -602,30 +602,36 @@ def _build_dive_pool() -> Dict[str, FormationDefinition]:
     pool["2"] = FormationDefinition(
         code="2", name="Sidebody Donut - Sideflake Donut", is_block=True, points=2,
         initial_name="Sidebody Donut", second_name="Sideflake Donut",
-        subgroup_split="2-Way (OC + Point) / 2-Way (IC + Tail)",
-        inter_degrees="180° Rotation",
-        primary_key_slot="Inside Center",
-        key_trigger="Build 1 solid -> Key -> 180° rotation -> Close Build 2",
-        head_switch_summary="Flyers head switch across center as pieces rotate 180°.",
-        coach_tips=["Smooth 180° piece rotations around individual piece centers; do not let pieces drift apart."],
-        pitfalls_and_busts=["Over-rotating past 180°; premature grip taking before separation."],
+        subgroup_split="3-Way (OC + IC + Tail) / Solo (Point)",
+        inter_degrees="3-Way 360° Spin / Solo Translation",
+        primary_key_slot="Point",
+        key_trigger="Sidebody Donut locked -> Point keys -> 3-Way turns 360° while Point translates -> Rebuild Sideflake Donut",
+        head_switch_summary="Point cross-references 3-way center during translation; 3-way maintains tight donut axis throughout 360° turn.",
+        coach_tips=[
+            "Point must release cleanly and translate down the line without drifting wide.",
+            "3-way must turn smoothly as a rigid unit without deforming the donut shape."
+        ],
+        pitfalls_and_busts=[
+            "3-way funneling or expanding radius during 360° spin.",
+            "Point arriving late at closing sideflake."
+        ],
         state_initial={
-            "Point": Flyer3DState(-35, 30, 0, 45, head_turn_deg=0),
-            "OC": Flyer3DState(-15, -15, 0, 45, head_turn_deg=0),
-            "IC": Flyer3DState(15, 15, 0, 225, head_turn_deg=0),
-            "Tail": Flyer3DState(35, -30, 0, 225, head_turn_deg=0)
+            "Point": Flyer3DState(0, 36, 0, 180, head_turn_deg=0),
+            "OC": Flyer3DState(0, 10, 0, 90, head_turn_deg=0),
+            "IC": Flyer3DState(16, -20, 0, 45, head_turn_deg=0),
+            "Tail": Flyer3DState(-16, -20, 0, 315, head_turn_deg=0)
         },
         state_inter={
-            "Point": Flyer3DState(-15, 45, 0, 135, head_turn_deg=45, head_switch_active=True, head_switch_desc="Head switch toward IC", gaze_target="IC"),
-            "OC": Flyer3DState(-35, 0, 0, 135, head_turn_deg=30, gaze_target="Tail"),
-            "IC": Flyer3DState(35, 0, 0, 315, head_turn_deg=30, head_switch_active=True, head_switch_desc="Head switch toward OC", gaze_target="OC"),
-            "Tail": Flyer3DState(15, -45, 0, 315, head_turn_deg=45, gaze_target="Point")
+            "Point": Flyer3DState(22, 12, 0, 180, head_turn_deg=-45, head_switch_active=True, head_switch_desc="Spotting 3-way center", gaze_target="OC"),
+            "OC": Flyer3DState(-5, -5, 0, 270, head_turn_deg=0, gaze_target="Point"),
+            "IC": Flyer3DState(-18, 12, 0, 225, head_turn_deg=0),
+            "Tail": Flyer3DState(15, -12, 0, 135, head_turn_deg=0)
         },
         state_close={
-            "Point": Flyer3DState(15, 35, 0, 225, head_turn_deg=0),
-            "OC": Flyer3DState(35, -10, 0, 225, head_turn_deg=0),
-            "IC": Flyer3DState(-35, 10, 0, 45, head_turn_deg=0),
-            "Tail": Flyer3DState(-15, -35, 0, 45, head_turn_deg=0)
+            "Point": Flyer3DState(15, -10, 0, 0, head_turn_deg=-20),
+            "OC": Flyer3DState(0, -10, 0, 0, head_turn_deg=0),
+            "IC": Flyer3DState(-18, -25, 0, 45, head_turn_deg=0),
+            "Tail": Flyer3DState(-20, 8, 0, 135, head_turn_deg=0)
         }
     )
 
@@ -920,30 +926,37 @@ def _build_dive_pool() -> Dict[str, FormationDefinition]:
     pool["12"] = FormationDefinition(
         code="12", name="Bundy - Bundy", is_block=True, points=2,
         initial_name="Bundy", second_name="Bundy",
-        subgroup_split="2-Way / 2-Way",
-        inter_degrees="Double 180° rotation across center",
+        subgroup_split="2-Way (Point + OC) / 2-Way (IC + Tail)",
+        inter_degrees="Front Piece 540° / Rear Piece 360°",
         primary_key_slot="Inside Center",
-        key_trigger="Bundy built -> Key -> 180° crossover -> Rebuild Bundy",
-        head_switch_summary="Both centers head switch across center to avoid collision during crossover.",
-        coach_tips=["Tight center crossover; maintain level control."],
-        pitfalls_and_busts=["Center collision; missing closing wrist grips."],
+        key_trigger="Bundy built in line -> IC keys -> Front piece turns 540°, Rear piece turns 360° -> Rebuild perpendicular Bundy",
+        head_switch_summary="Centers cross-reference across center during simultaneous 540°/360° turns.",
+        coach_tips=[
+            "Front piece (Point + OC) executes explosive 540° carve maintaining tight piece axis.",
+            "Rear piece (IC + Tail) executes compact 360° spin in place.",
+            "Both pieces must match fall rate and close on the perpendicular axis."
+        ],
+        pitfalls_and_busts=[
+            "Front piece blowing out wide during 540° rotation.",
+            "Rear piece over-rotating past 360°."
+        ],
         state_initial={
-            "Point": Flyer3DState(-30, 35, 0, 90, head_turn_deg=0),
-            "OC": Flyer3DState(-10, -10, 0, 90, head_turn_deg=0),
-            "IC": Flyer3DState(10, 10, 0, 270, head_turn_deg=0),
-            "Tail": Flyer3DState(30, -35, 0, 270, head_turn_deg=0)
+            "OC": Flyer3DState(0, 42, 0, 0, head_turn_deg=0),
+            "Point": Flyer3DState(0, 15, 0, 0, head_turn_deg=0),
+            "IC": Flyer3DState(0, -12, 0, 0, head_turn_deg=0),
+            "Tail": Flyer3DState(0, -38, 0, 0, head_turn_deg=0)
         },
         state_inter={
-            "Point": Flyer3DState(5, 45, 0, 180, head_turn_deg=-45, head_switch_active=True, head_switch_desc="Tracking Tail across center", gaze_target="Tail"),
-            "OC": Flyer3DState(-25, 15, 0, 180, head_turn_deg=-30, gaze_target="IC"),
-            "IC": Flyer3DState(25, -15, 0, 0, head_turn_deg=30, head_switch_active=True, head_switch_desc="Tracking OC across center", gaze_target="OC"),
-            "Tail": Flyer3DState(-5, -45, 0, 0, head_turn_deg=45, gaze_target="Point")
+            "OC": Flyer3DState(-18, 25, 0, 180, head_turn_deg=0),
+            "Point": Flyer3DState(16, 20, 0, 180, head_turn_deg=0),
+            "IC": Flyer3DState(16, -20, 0, 180, head_turn_deg=0),
+            "Tail": Flyer3DState(-18, -25, 0, 180, head_turn_deg=0)
         },
         state_close={
-            "Point": Flyer3DState(30, -35, 0, 270, head_turn_deg=0),
-            "OC": Flyer3DState(10, 10, 0, 270, head_turn_deg=0),
-            "IC": Flyer3DState(-10, -10, 0, 90, head_turn_deg=0),
-            "Tail": Flyer3DState(-30, 35, 0, 90, head_turn_deg=0)
+            "OC": Flyer3DState(-40, 0, 0, 270, head_turn_deg=0),
+            "Point": Flyer3DState(-15, 0, 0, 270, head_turn_deg=0),
+            "IC": Flyer3DState(12, 0, 0, 270, head_turn_deg=0),
+            "Tail": Flyer3DState(38, 0, 0, 270, head_turn_deg=0)
         }
     )
 

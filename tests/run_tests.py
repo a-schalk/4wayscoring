@@ -109,6 +109,16 @@ def test_timing_and_models():
     assert sess.total_score() == 3
 
 
+_shared_main_win = None
+
+def _get_shared_main_win():
+    global _shared_main_win
+    if _shared_main_win is None:
+        from scoring import DebriefMainWindow
+        _shared_main_win = DebriefMainWindow()
+    return _shared_main_win
+
+
 def test_gui_and_interactions():
     """Test GUI initialization, point selection, table updates, and draw update."""
     from PyQt6.QtWidgets import QApplication, QDialog, QMessageBox
@@ -120,9 +130,9 @@ def test_gui_and_interactions():
     QMessageBox.information = lambda *a, **kw: None
     QMessageBox.warning = lambda *a, **kw: None
 
-    from scoring import DebriefMainWindow, ScoringPoint
+    from scoring import ScoringPoint
 
-    w = DebriefMainWindow()
+    w = _get_shared_main_win()
     w.session.exit_time = 10.0
     w.edit_draw.setText("A - 12 - 7 - B")
     w._on_draw_changed("A - 12 - 7 - B")
@@ -166,6 +176,8 @@ def test_gui_and_interactions():
 
 def test_card_manager():
     """Test Rhythm XP formation card path resolution and pixmap loading."""
+    from PyQt6.QtWidgets import QApplication
+    app = QApplication.instance() or QApplication(sys.argv)
     import card_manager
 
     # Randoms
@@ -187,7 +199,6 @@ def test_training_db_and_draw_generator():
     from training_db import TrainingDatabase
     from draw_generator import DrawGenerator
     from draw_dialog import DrawGeneratorDialog
-    from scoring import DebriefMainWindow
 
     # Training DB
     db = TrainingDatabase()
@@ -217,7 +228,7 @@ def test_training_db_and_draw_generator():
         assert 5 <= r.total_points <= 6
 
     # DrawGeneratorDialog offscreen test
-    w = DebriefMainWindow()
+    w = _get_shared_main_win()
     dlg = DrawGeneratorDialog(main_window=w)
     assert len(dlg.current_rounds) >= 1
     assert dlg.table_stats.rowCount() == 39
@@ -226,6 +237,53 @@ def test_training_db_and_draw_generator():
     first_round = dlg.current_rounds[0]
     dlg._apply_current_round_to_debrief()
     assert w.edit_draw.text() == first_round.draw_string
+
+
+def test_formation_3d_and_continuity_booklet():
+    """Test 3D Formation Explorer, Continuity Booklet strips, and slot colors."""
+    import card_manager
+    import formation_tool
+    import formation_db
+
+    # 1. Verify SDC Rhythm XP slot colors
+    assert formation_db.COLOR_POINT == "#EF4444"   # Red
+    assert formation_db.COLOR_OC == "#10B981"      # Green
+    assert formation_db.COLOR_IC == "#3B82F6"      # Blue
+    assert formation_db.COLOR_TAIL == "#EAB308"    # Yellow
+
+    # 2. Verify Continuity Booklet strips for Blocks & Randoms
+    p_b12 = card_manager.get_continuity_strip_path("12")
+    assert p_b12 is not None and os.path.isfile(p_b12)
+    pix_b12 = card_manager.get_continuity_strip_pixmap("12", max_width=200, max_height=400)
+    assert pix_b12 is not None and not pix_b12.isNull()
+
+    # Vertical block variant
+    p_b6_vert = card_manager.get_continuity_strip_path("6", vertical=True)
+    assert p_b6_vert is not None and "vert" in p_b6_vert
+    p_b6_flat = card_manager.get_continuity_strip_path("6", vertical=False)
+    assert p_b6_flat is not None and "flat" in p_b6_flat
+
+    # 3. Test FormationExplorerWindow lifecycle and select_formation
+    win_3d = formation_tool.FormationExplorerWindow("12")
+    assert win_3d.detail_widget.tabs.count() == 6
+    assert win_3d.detail_widget.lbl_continuity_image.pixmap() is not None
+
+    # Test select_formation
+    win_3d.select_formation("12", part=1)
+    assert win_3d.slider_phase.value() == 0
+    win_3d.select_formation("12", part=2)
+    assert win_3d.slider_phase.value() == 200
+
+    win_3d.select_formation("A", part=0)
+    assert win_3d.detail_widget.current_formation.code == "A"
+
+    # 4. Test opening from DebriefMainWindow multiple times
+    main_win = _get_shared_main_win()
+    main_win._open_3d_explorer_for_formation("12", 1)
+    assert main_win._formation_explorer_window is not None
+    # Re-call with different formation (no crash / no AttributeError)
+    main_win._open_3d_explorer_for_formation("B", 0)
+    assert main_win._formation_explorer_window.detail_widget.current_formation.code == "B"
 
 
 def main():
@@ -241,6 +299,7 @@ def main():
         ("GUI Offscreen, Selection & Table Edit", test_gui_and_interactions),
         ("Rhythm XP Card Manager & Pixmaps", test_card_manager),
         ("Training DB & FAI AAA Draw Generator", test_training_db_and_draw_generator),
+        ("3D Formation Explorer & Continuity Booklet", test_formation_3d_and_continuity_booklet),
     ]
 
     passed = 0

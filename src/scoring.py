@@ -2992,26 +2992,22 @@ class DebriefMainWindow(QMainWindow):
     def _open_3d_explorer_for_formation(self, base_code: str, part: int = 0):
         try:
             import formation_tool
-            import formation_db
-            clean_base = re.sub(r'[-._].*$', '', base_code.strip())
-            if not hasattr(self, "_formation_explorer_window") or self._formation_explorer_window is None:
+            clean_base = re.sub(r'[-._].*$', '', base_code.strip()) or "A"
+
+            # Check if existing window is still alive and valid
+            win_alive = False
+            if hasattr(self, "_formation_explorer_window") and self._formation_explorer_window is not None:
+                try:
+                    # Accessing a Qt property will fail if C++ object was destroyed
+                    _ = self._formation_explorer_window.windowTitle()
+                    win_alive = True
+                except RuntimeError:
+                    win_alive = False
+
+            if not win_alive:
                 self._formation_explorer_window = formation_tool.FormationExplorerWindow(clean_base)
-            else:
-                f = formation_db.get_formation(clean_base)
-                if f:
-                    self._formation_explorer_window.viewport_3d.set_formation(f)
-                    self._formation_explorer_window.detail_widget.set_formation(f)
-                    for i in range(self._formation_explorer_window.combo_formation.count()):
-                        txt = self._formation_explorer_window.combo_formation.itemText(i)
-                        if txt.startswith(f"{f.code} -"):
-                            self._formation_explorer_window.combo_formation.setCurrentIndex(i)
-                            break
 
-            if part == 2 and hasattr(self._formation_explorer_window, 'slider_phase'):
-                self._formation_explorer_window.slider_phase.setValue(100)
-            elif part == 1 and hasattr(self._formation_explorer_window, 'slider_phase'):
-                self._formation_explorer_window.slider_phase.setValue(0)
-
+            self._formation_explorer_window.select_formation(clean_base, part)
             self._formation_explorer_window.show()
             self._formation_explorer_window.raise_()
             self._formation_explorer_window.activateWindow()

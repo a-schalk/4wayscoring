@@ -9,6 +9,7 @@ head switch gaze vectors, key responsibilities, and coach notes.
 import sys
 import math
 import os
+import re
 from typing import Dict, List, Optional, Tuple
 
 from PyQt6.QtCore import (
@@ -16,7 +17,7 @@ from PyQt6.QtCore import (
 )
 from PyQt6.QtGui import (
     QPainter, QPen, QColor, QFont, QBrush, QPolygonF, QPainterPath,
-    QLinearGradient, QRadialGradient, QAction, QIcon, QKeySequence
+    QLinearGradient, QRadialGradient, QAction, QIcon, QKeySequence, QPixmap
 )
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -26,7 +27,7 @@ from PyQt6.QtWidgets import (
     QMessageBox, QFileDialog, QSizePolicy
 )
 
-# Import comprehensive formation database
+# Import comprehensive formation database and card manager
 try:
     import formation_db
     from formation_db import (
@@ -34,6 +35,7 @@ try:
         DIVE_POOL, get_formation, get_all_formations,
         COLOR_POINT, COLOR_OC, COLOR_IC, COLOR_TAIL, COLOR_VIDEO
     )
+    import card_manager
 except ImportError:
     # Fallback to local path if run from elsewhere
     sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -43,6 +45,7 @@ except ImportError:
         DIVE_POOL, get_formation, get_all_formations,
         COLOR_POINT, COLOR_OC, COLOR_IC, COLOR_TAIL, COLOR_VIDEO
     )
+    import card_manager
 
 
 # =============================================================================
@@ -134,7 +137,7 @@ class Formation3DWidget(QWidget):
         # Camera parameters
         self.yaw: float = 0.0          # Horizontal orbit angle in radians
         self.pitch: float = 0.85       # Vertical pitch angle (0 = side, ~1.57 = top down)
-        self.zoom: float = 1.05        # Camera zoom factor
+        self.zoom: float = 2.2         # Camera zoom factor (scaled for clear flyer visibility)
         self.pan_x: float = 0.0        # Camera pan X offset
         self.pan_y: float = 0.0        # Camera pan Y offset
 
@@ -203,11 +206,11 @@ class Formation3DWidget(QWidget):
         if top_down:
             self.yaw = 0.0
             self.pitch = 1.55  # Near 90° straight down
-            self.zoom = 1.05
+            self.zoom = 2.2
         else:
             self.yaw = 0.25
             self.pitch = 0.75  # ~43° perspective
-            self.zoom = 1.05
+            self.zoom = 2.2
         self.pan_x = 0.0
         self.pan_y = 0.0
         self.update()
@@ -729,12 +732,16 @@ class Formation3DWidget(QWidget):
         # E. Slot Badges, Key Crown & Head Switch Icon
         # ---------------------------------------------------------------------
         if self.show_slot_labels:
-            painter.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
-            painter.setPen(QColor("#0f172a"))
-            # Shadow label
-            painter.drawText(QRectF(px - 39, py - 37, 80, 20), Qt.AlignmentFlag.AlignCenter, slot)
+            badge_rect = QRectF(px - 28, py - 38, 56, 18)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(15, 23, 42, 220))
+            painter.drawRoundedRect(badge_rect, 4.0, 4.0)
+            painter.setPen(QPen(base_color, 1.4))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(badge_rect, 4.0, 4.0)
+            painter.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
             painter.setPen(QColor("#ffffff"))
-            painter.drawText(QRectF(px - 40, py - 38, 80, 20), Qt.AlignmentFlag.AlignCenter, slot)
+            painter.drawText(badge_rect, Qt.AlignmentFlag.AlignCenter, slot)
 
         # 3D KEY Crown Badge
         if self.show_key_badge and self.current_formation:
@@ -845,18 +852,22 @@ class Formation3DWidget(QWidget):
 
 class FormationDetailWidget(QWidget):
     """
-    Inspector panel detailing the selected formation, who has the key,
-    head switches, and slot-by-slot duties for Point, OC, IC, and Tail.
+    Inspector panel detailing the selected formation:
+    - Official Rhythm XP Continuity Booklet Diagram Strip
+    - Master Key & Head Switch Banner
+    - Comprehensive Coaching Overview & 5-Step Debrief Checklist
+    - Slot-by-slot duties (Point, OC, IC, Tail)
     """
     def __init__(self, parent=None):
         super().__init__(parent)
         self.current_formation: Optional[FormationDefinition] = None
+        self.use_vertical: bool = False
         self._init_ui()
 
     def _init_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(10)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(8)
 
         # 1. Master Key & Head Switch Banner Card
         self.card_master = QFrame()
@@ -866,7 +877,7 @@ class FormationDetailWidget(QWidget):
                 background: #0f172a;
                 border: 1px solid #334155;
                 border-radius: 8px;
-                padding: 10px;
+                padding: 8px;
             }
         """)
         m_layout = QVBoxLayout(self.card_master)
@@ -876,9 +887,9 @@ class FormationDetailWidget(QWidget):
         # Row A: Key Info
         r1 = QHBoxLayout()
         lbl_key_icon = QLabel("🔑")
-        lbl_key_icon.setFont(QFont("Segoe UI", 16))
-        self.lbl_key_title = QLabel("<b>KEY:</b> Inside Center [IC]")
-        self.lbl_key_title.setStyleSheet("color: #f59e0b; font-size: 13px;")
+        lbl_key_icon.setFont(QFont("Segoe UI", 15))
+        self.lbl_key_title = QLabel("<b>KEY PERSON:</b> Inside Center [IC]")
+        self.lbl_key_title.setStyleSheet("font-size: 13px;")
         r1.addWidget(lbl_key_icon)
         r1.addWidget(self.lbl_key_title)
         r1.addStretch()
@@ -898,8 +909,8 @@ class FormationDetailWidget(QWidget):
         # Row B: Head Switch Info
         r2 = QHBoxLayout()
         lbl_hs_icon = QLabel("👀")
-        lbl_hs_icon.setFont(QFont("Segoe UI", 16))
-        self.lbl_hs_title = QLabel("<b>HEAD SWITCHES:</b> Point & IC")
+        lbl_hs_icon.setFont(QFont("Segoe UI", 15))
+        self.lbl_hs_title = QLabel("<b>HEAD SWITCHES & REFERENZEN:</b>")
         self.lbl_hs_title.setStyleSheet("color: #38bdf8; font-size: 13px;")
         r2.addWidget(lbl_hs_icon)
         r2.addWidget(self.lbl_hs_title)
@@ -913,7 +924,7 @@ class FormationDetailWidget(QWidget):
 
         layout.addWidget(self.card_master)
 
-        # 2. Tab Widget for Slot Roles & Overview
+        # 2. Tab Widget for Continuity, Overview & Slots
         self.tabs = QTabWidget()
         self.tabs.setStyleSheet("""
             QTabWidget::pane {
@@ -924,7 +935,7 @@ class FormationDetailWidget(QWidget):
             QTabBar::tab {
                 background: #0f172a;
                 color: #94a3b8;
-                padding: 6px 14px;
+                padding: 6px 8px;
                 border-top-left-radius: 4px;
                 border-top-right-radius: 4px;
                 margin-right: 2px;
@@ -938,40 +949,91 @@ class FormationDetailWidget(QWidget):
             }
         """)
 
-        # Overview Tab
+        # Tab 0: Continuity Booklet Diagram Strip
+        self.tab_continuity = QWidget()
+        l_cont = QVBoxLayout(self.tab_continuity)
+        l_cont.setContentsMargins(6, 6, 6, 6)
+        l_cont.setSpacing(6)
+
+        lbl_cont_hdr = QLabel("<b>SDC Rhythm XP Continuity Booklet Referenz:</b>")
+        lbl_cont_hdr.setStyleSheet("color: #38bdf8; font-size: 11px;")
+        l_cont.addWidget(lbl_cont_hdr)
+
+        self.scroll_continuity = QScrollArea()
+        self.scroll_continuity.setWidgetResizable(True)
+        self.scroll_continuity.setStyleSheet("background: #0f172a; border: 1px solid #334155; border-radius: 6px;")
+        self.lbl_continuity_image = QLabel()
+        self.lbl_continuity_image.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_continuity_image.setStyleSheet("padding: 8px; color: #94a3b8;")
+        self.scroll_continuity.setWidget(self.lbl_continuity_image)
+        l_cont.addWidget(self.scroll_continuity)
+
+        self.tabs.addTab(self.tab_continuity, "📖 Continuity")
+
+        # Tab 1: Overview Tab
         self.txt_overview = QTextBrowser()
         self.txt_overview.setOpenExternalLinks(True)
         self.txt_overview.setStyleSheet("border: none; background: transparent; color: #f1f5f9; font-size: 11px;")
-        self.tabs.addTab(self.txt_overview, "📋 Übersicht & Tipps")
+        self.tabs.addTab(self.txt_overview, "📋 Übersicht")
 
-        # Point Tab (Red)
+        # Tab 2: Point Tab (Red)
         self.txt_point = QTextBrowser()
         self.txt_point.setStyleSheet("border: none; background: transparent; color: #f1f5f9; font-size: 11px;")
         self.tabs.addTab(self.txt_point, "🔴 Point")
 
-        # OC Tab (Blue)
+        # Tab 3: OC Tab (Green)
         self.txt_oc = QTextBrowser()
         self.txt_oc.setStyleSheet("border: none; background: transparent; color: #f1f5f9; font-size: 11px;")
-        self.tabs.addTab(self.txt_oc, "🔵 Outside Center")
+        self.tabs.addTab(self.txt_oc, "🟢 OC")
 
-        # IC Tab (Yellow)
+        # Tab 4: IC Tab (Blue)
         self.txt_ic = QTextBrowser()
         self.txt_ic.setStyleSheet("border: none; background: transparent; color: #f1f5f9; font-size: 11px;")
-        self.tabs.addTab(self.txt_ic, "🟡 Inside Center")
+        self.tabs.addTab(self.txt_ic, "🔵 IC")
 
-        # Tail Tab (Green)
+        # Tab 5: Tail Tab (Yellow)
         self.txt_tail = QTextBrowser()
         self.txt_tail.setStyleSheet("border: none; background: transparent; color: #f1f5f9; font-size: 11px;")
-        self.tabs.addTab(self.txt_tail, "🟢 Tail")
+        self.tabs.addTab(self.txt_tail, "🟡 Tail")
 
         layout.addWidget(self.tabs)
+
+    def set_vertical_technique(self, enable: bool):
+        """Switches between vertical and flat continuity strip display."""
+        self.use_vertical = enable
+        if self.current_formation:
+            self._update_continuity_image(self.current_formation)
+
+    def _update_continuity_image(self, form: FormationDefinition):
+        """Updates the Continuity Booklet diagram strip."""
+        try:
+            pix = card_manager.get_continuity_strip_pixmap(
+                form.code, vertical=self.use_vertical, max_width=330, max_height=850
+            )
+            if pix and not pix.isNull():
+                self.lbl_continuity_image.setPixmap(pix)
+                self.lbl_continuity_image.setText("")
+            else:
+                self.lbl_continuity_image.setPixmap(QPixmap())
+                self.lbl_continuity_image.setText(f"Keine Bildkarte für '{form.code}' gefunden.")
+        except Exception as e:
+            self.lbl_continuity_image.setText(f"Fehler beim Laden: {e}")
 
     def set_formation(self, form: FormationDefinition):
         """Updates panel content with formation details."""
         self.current_formation = form
 
-        # Update Master Card
-        self.lbl_key_title.setText(f"<b>KEY PERSON:</b> {form.primary_key_slot}")
+        # Update Master Card Key Person badge
+        key_color = "#38bdf8"
+        if "Point" in form.primary_key_slot:
+            key_color = COLOR_POINT
+        elif "Outside" in form.primary_key_slot or "OC" in form.primary_key_slot:
+            key_color = COLOR_OC
+        elif "Inside" in form.primary_key_slot or "IC" in form.primary_key_slot:
+            key_color = COLOR_IC
+        elif "Tail" in form.primary_key_slot:
+            key_color = COLOR_TAIL
+        self.lbl_key_title.setText(f"<b style='color: {key_color};'>KEY PERSON:</b> {form.primary_key_slot}")
         self.lbl_key_desc.setText(
             f"<b>Auslöser:</b> {form.key_trigger}<br>"
             f"<b>Signal-Methode:</b> {form.key_method}<br>"
@@ -981,33 +1043,42 @@ class FormationDetailWidget(QWidget):
         self.lbl_hs_title.setText("<b>HEAD SWITCHES & REFERENZEN:</b>")
         self.lbl_hs_desc.setText(form.head_switch_summary)
 
+        # Update Continuity Strip
+        self._update_continuity_image(form)
+
         # Overview Tab
-        tips_html = "".join([f"<li>{tip}</li>" for tip in form.coach_tips])
-        pitfalls_html = "".join([f"<li style='color: #fca5a5;'>{p}</li>" for p in form.pitfalls_and_busts])
-        
+        tips_html = "".join([f"<li style='margin-bottom: 4px;'>{tip}</li>" for tip in form.coach_tips])
+        pitfalls_html = "".join([f"<li style='color: #fca5a5; margin-bottom: 4px;'>{p}</li>" for p in form.pitfalls_and_busts])
+
         block_info = ""
         if form.is_block:
             block_info = f"""
-            <div style='background: #0f172a; padding: 8px; border-radius: 6px; margin-bottom: 8px;'>
-                <b style='color: #38bdf8;'>Block Details:</b><br>
-                • <b>Start Formation:</b> {form.initial_name}<br>
-                • <b>Ziel Formation:</b> {form.second_name}<br>
-                • <b>Subgruppen:</b> {form.subgroup_split}<br>
-                • <b>Drehgrade:</b> {form.inter_degrees}<br>
-                • <b>Vertikal (Over/Under):</b> {'Verfügbar' if form.supports_vertical else 'Nur Flat/On-Level'}
+            <div style='background: #0f172a; padding: 8px 10px; border-radius: 6px; margin-bottom: 10px; border: 1px solid #334155;'>
+                <div style='color: #38bdf8; font-size: 12px; font-weight: bold; margin-bottom: 4px;'>Block Details:</div>
+                <div style='line-height: 1.4;'>
+                    • <b>Start Formation:</b> {form.initial_name}<br>
+                    • <b>Ziel Formation:</b> {form.second_name}<br>
+                    • <b>Subgruppen:</b> {form.subgroup_split}<br>
+                    • <b>Drehgrade:</b> {form.inter_degrees}<br>
+                    • <b>Vertikal (Over/Under):</b> {'Verfügbar' if form.supports_vertical else 'Nur Flat/On-Level'}
+                </div>
             </div>
             """
 
         self.txt_overview.setHtml(f"""
-        <div style='font-family: Segoe UI, sans-serif;'>
-            <h3 style='color: #38bdf8; margin-top: 0;'>{form.code}: {form.name}</h3>
+        <div style='font-family: Segoe UI, sans-serif; font-size: 11px;'>
+            <h3 style='color: #38bdf8; margin-top: 0; margin-bottom: 8px;'>{form.code}: {form.name}</h3>
             {block_info}
-            <b style='color: #4ade80;'>Profi Coach Tipps (Rhythm / Airspeed / Fury):</b>
-            <ul>{tips_html}</ul>
-            <b style='color: #ef4444;'>Häufige Fehler & Bust-Gefahren:</b>
-            <ul>{pitfalls_html}</ul>
-            <div style='background: #1e293b; border-left: 3px solid #38bdf8; padding: 6px; margin-top: 8px;'>
-                <b style='color: #94a3b8;'>5-Schritte Block-Debrief Checklist:</b><br>
+            <div style='margin-top: 10px; margin-bottom: 8px;'>
+                <div style='color: #4ade80; font-weight: bold; margin-bottom: 4px;'>Profi Coach Tipps (Rhythm XP / Airspeed):</div>
+                <ul style='padding-left: 18px; margin: 0;'>{tips_html}</ul>
+            </div>
+            <div style='margin-top: 10px; margin-bottom: 8px;'>
+                <div style='color: #ef4444; font-weight: bold; margin-bottom: 4px;'>Häufige Fehler & Bust-Gefahren:</div>
+                <ul style='padding-left: 18px; margin: 0;'>{pitfalls_html}</ul>
+            </div>
+            <div style='background: #0f172a; border-left: 3px solid #38bdf8; padding: 6px 8px; margin-top: 12px; border-radius: 4px;'>
+                <div style='color: #38bdf8; font-weight: bold; margin-bottom: 4px;'>5-Schritte Block-Debrief Checklist (Rhythm XP):</div>
                 1. <b>Build</b> (Aufbau, Achse, Centerpoint)<br>
                 2. <b>Key</b> (Gleichzeitiger explosiver Release)<br>
                 3. <b>Inter Picture</b> (Richtung, Distanz, Speed, Drehung)<br>
@@ -1030,18 +1101,18 @@ class FormationDetailWidget(QWidget):
                 continue
 
             txt_widget.setHtml(f"""
-            <div style='font-family: Segoe UI, sans-serif;'>
-                <h3 style='color: {detail.color}; margin-top: 0;'>{detail.slot_name}</h3>
-                <div style='background: #0f172a; padding: 8px; border-radius: 6px; margin-bottom: 8px;'>
+            <div style='font-family: Segoe UI, sans-serif; font-size: 11px;'>
+                <h3 style='color: {detail.color}; margin-top: 0; margin-bottom: 6px;'>{detail.slot_name}</h3>
+                <div style='background: #0f172a; padding: 8px; border-radius: 6px; margin-bottom: 8px; border: 1px solid #334155;'>
                     <b style='color: #38bdf8;'>Rolle:</b> {detail.role_summary}<br>
                     <b style='color: #f59e0b;'>Drehung:</b> {detail.rotation_degrees}<br>
                     <b style='color: #4ade80;'>Key-Rolle:</b> {detail.key_role}
                 </div>
                 <b>Aufgaben & Flugmechanik:</b>
-                <p>{detail.duties_description}</p>
+                <p style='margin-top: 4px; margin-bottom: 8px;'>{detail.duties_description}</p>
                 <b>Griffe (Nehmen & Präsentieren):</b>
-                <p>{detail.grip_actions}</p>
-                <div style='background: #0f172a; border-left: 3px solid #f59e0b; padding: 6px;'>
+                <p style='margin-top: 4px; margin-bottom: 8px;'>{detail.grip_actions}</p>
+                <div style='background: #0f172a; border-left: 3px solid #f59e0b; padding: 6px 8px;'>
                     <b style='color: #f59e0b;'>Blickfeld & Head Switch:</b><br>
                     {detail.head_switch_notes}
                 </div>
@@ -1050,8 +1121,8 @@ class FormationDetailWidget(QWidget):
 
     def select_slot_tab(self, slot_name: str):
         """Switches active tab to the specified slot."""
-        tab_map = {"Point": 1, "OC": 2, "IC": 3, "Tail": 4}
-        idx = tab_map.get(slot_name, 0)
+        tab_map = {"Point": 2, "OC": 3, "IC": 4, "Tail": 5}
+        idx = tab_map.get(slot_name, 1)
         self.tabs.setCurrentIndex(idx)
 
 
@@ -1064,8 +1135,8 @@ class FormationExplorerWindow(QMainWindow):
 
     def __init__(self, initial_code: Optional[str] = "21"):
         super().__init__()
-        self.setWindowTitle("FAI 4-Way Formation Skydiving 3D Visualizer & Coach")
-        self.resize(1200, 800)
+        self.setWindowTitle("FAI 4-Way Formation Skydiving 3D Visualizer & Continuity Coach")
+        self.resize(1280, 850)
         self.setStyleSheet("""
             QMainWindow {
                 background: #0b1329;
@@ -1144,17 +1215,30 @@ class FormationExplorerWindow(QMainWindow):
         self.txt_search.textChanged.connect(self._filter_formations)
         left_layout.addWidget(self.txt_search)
 
-        # Category Filter Bar
-        filter_layout = QHBoxLayout()
+        # Category Filter Bar (2 rows of 2 buttons for clean layout)
+        filter_layout = QVBoxLayout()
         filter_layout.setSpacing(4)
+        
+        row1 = QHBoxLayout()
+        row1.setSpacing(4)
         self.btn_filter_all = QPushButton("Alle")
         self.btn_filter_randoms = QPushButton("Randoms")
+        row1.addWidget(self.btn_filter_all)
+        row1.addWidget(self.btn_filter_randoms)
+
+        row2 = QHBoxLayout()
+        row2.setSpacing(4)
         self.btn_filter_blocks = QPushButton("Blocks")
         self.btn_filter_vertical = QPushButton("Vertikal")
+        row2.addWidget(self.btn_filter_blocks)
+        row2.addWidget(self.btn_filter_vertical)
+
+        filter_layout.addLayout(row1)
+        filter_layout.addLayout(row2)
 
         for btn in [self.btn_filter_all, self.btn_filter_randoms, self.btn_filter_blocks, self.btn_filter_vertical]:
             btn.setCheckable(True)
-            filter_layout.addWidget(btn)
+            btn.setStyleSheet("padding: 4px 6px; font-size: 11px;")
 
         self.btn_filter_all.setChecked(True)
         self.filter_group = QButtonGroup(self)
@@ -1170,7 +1254,7 @@ class FormationExplorerWindow(QMainWindow):
         self.list_formations.currentItemChanged.connect(self._on_formation_selected)
         left_layout.addWidget(self.list_formations)
 
-        left_panel.setMinimumWidth(240)
+        left_panel.setMinimumWidth(230)
         splitter.addWidget(left_panel)
 
         # ---------------------------------------------------------------------
@@ -1196,9 +1280,11 @@ class FormationExplorerWindow(QMainWindow):
 
         # Row 1: Phase Slider & Steppers
         r1 = QHBoxLayout()
-        self.btn_phase_initial = QPushButton("1. Initial Build")
-        self.btn_phase_inter = QPushButton("2. Inter Picture")
-        self.btn_phase_close = QPushButton("3. Closing Build")
+        self.btn_phase_initial = QPushButton("1. Initial")
+        self.btn_phase_inter = QPushButton("2. Inter")
+        self.btn_phase_close = QPushButton("3. Close")
+        for b in [self.btn_phase_initial, self.btn_phase_inter, self.btn_phase_close]:
+            b.setStyleSheet("padding: 4px 6px; font-size: 11px;")
 
         self.btn_phase_initial.clicked.connect(lambda: self._set_slider_phase(0.0))
         self.btn_phase_inter.clicked.connect(lambda: self._set_slider_phase(1.0))
@@ -1217,17 +1303,21 @@ class FormationExplorerWindow(QMainWindow):
 
         # Row 2: Playback & View Controls
         r2 = QHBoxLayout()
-        self.btn_play = QPushButton("▶ Animation Abspielen")
-        self.btn_play.setStyleSheet("background: #2563eb; color: #ffffff;")
+        self.btn_play = QPushButton("▶ Animation")
+        self.btn_play.setStyleSheet("background: #2563eb; color: #ffffff; padding: 4px 10px; font-size: 11px; font-weight: bold;")
         self.btn_play.clicked.connect(self._toggle_playback)
 
         self.chk_vertical = QCheckBox("Vertikal (Over/Under)")
+        self.chk_vertical.setStyleSheet("font-size: 11px;")
         self.chk_vertical.toggled.connect(self.viewport_3d.set_vertical_technique)
+        self.chk_vertical.toggled.connect(self.detail_widget_sync_vertical)
 
         self.btn_view_top = QPushButton("Draufsicht (2D)")
+        self.btn_view_top.setStyleSheet("padding: 4px 8px; font-size: 11px;")
         self.btn_view_top.clicked.connect(lambda: self.viewport_3d.reset_camera(top_down=True))
 
         self.btn_view_3d = QPushButton("3D Perspektive")
+        self.btn_view_3d.setStyleSheet("padding: 4px 8px; font-size: 11px;")
         self.btn_view_3d.clicked.connect(lambda: self.viewport_3d.reset_camera(top_down=False))
 
         r2.addWidget(self.btn_play)
@@ -1245,11 +1335,11 @@ class FormationExplorerWindow(QMainWindow):
         # Right Panel: Slot Inspector & Master Key Card
         # ---------------------------------------------------------------------
         self.detail_widget = FormationDetailWidget()
-        self.detail_widget.setMinimumWidth(320)
+        self.detail_widget.setMinimumWidth(340)
         splitter.addWidget(self.detail_widget)
 
-        # Splitter initial sizes: 22% list, 48% 3D viewport, 30% detail panel
-        splitter.setSizes([260, 560, 380])
+        # Splitter initial sizes: 18% list, 41% 3D viewport, 41% detail panel
+        splitter.setSizes([230, 520, 530])
 
         # Top Menu Bar
         self._init_menu_bar()
@@ -1358,11 +1448,46 @@ class FormationExplorerWindow(QMainWindow):
         self.btn_phase_close.setEnabled(f.is_block)
         self.slider_phase.setEnabled(f.is_block)
         self.btn_play.setEnabled(f.is_block)
+        self.chk_vertical.blockSignals(True)
         self.chk_vertical.setEnabled(f.supports_vertical)
         self.chk_vertical.setChecked(f.supports_vertical)
+        self.chk_vertical.blockSignals(False)
+        self.detail_widget.set_vertical_technique(f.supports_vertical)
+        self.viewport_3d.set_vertical_technique(f.supports_vertical)
 
         self.slider_phase.setValue(0)
         self.btn_play.setText("▶ Animation Abspielen")
+
+    def detail_widget_sync_vertical(self, enabled: bool):
+        """Syncs vertical technique to detail widget continuity diagram."""
+        if hasattr(self, 'detail_widget') and self.detail_widget:
+            self.detail_widget.set_vertical_technique(enabled)
+
+    def select_formation(self, code: str, part: int = 0):
+        """Programmatically select a formation and phase part (1=Initial, 2=Close)."""
+        clean = re.sub(r'[-._].*$', '', code.strip()).upper()
+        if not clean:
+            return
+
+        # Find matching item in list
+        matched = False
+        for i in range(self.list_formations.count()):
+            item = self.list_formations.item(i)
+            c = item.data(Qt.ItemDataRole.UserRole)
+            if c and str(c).upper() == clean:
+                self.list_formations.setCurrentItem(item)
+                matched = True
+                break
+
+        if not matched and self.list_formations.count() > 0:
+            self.list_formations.setCurrentRow(0)
+
+        # Set phase if block
+        if hasattr(self, 'slider_phase') and self.slider_phase.isEnabled():
+            if part == 2:
+                self.slider_phase.setValue(200)  # Closing Build
+            elif part == 1:
+                self.slider_phase.setValue(0)    # Initial Build
 
     def _on_flyer_clicked(self, slot_name: str):
         """When user clicks a flyer in 3D, switch to their slot tab."""
@@ -1386,10 +1511,10 @@ class FormationExplorerWindow(QMainWindow):
         self.viewport_3d.play_pause_animation()
         if self.viewport_3d.is_animating:
             self.btn_play.setText("⏸ Pause")
-            self.btn_play.setStyleSheet("background: #e11d48; color: #ffffff;")
+            self.btn_play.setStyleSheet("background: #e11d48; color: #ffffff; padding: 4px 10px; font-size: 11px; font-weight: bold;")
         else:
-            self.btn_play.setText("▶ Animation Abspielen")
-            self.btn_play.setStyleSheet("background: #2563eb; color: #ffffff;")
+            self.btn_play.setText("▶ Animation")
+            self.btn_play.setStyleSheet("background: #2563eb; color: #ffffff; padding: 4px 10px; font-size: 11px; font-weight: bold;")
 
     def _toggle_gaze_rays(self, checked: bool):
         self.viewport_3d.show_gaze_rays = checked

@@ -73,13 +73,13 @@ The central briefing, debriefing, scoring, and video analytics application.
 
 ---
 
-## 📦 `src/formation_tool.py` (~1440 lines)
+## 📦 `src/formation_tool.py` (~1565 lines)
 
 The standalone and integrated 3D formation explorer.
 
-- `Formation3DWidget(QWidget)` (Line 120): Custom OpenGL/QPainter 3D rendering widget showing the 4 flyers, relative orientations, grips, and head switch lines.
-- `FormationDetailWidget(QWidget)` (Line 846): Side panel showing slot assignments, FAI codes, grip descriptions, and technical notes.
-- `FormationExplorerWindow(QMainWindow)` (Line 1062): Full application window with formation browser, search filter, phase slider (0% to 100% for blocks), and launch button for scoring.
+- `Formation3DWidget(QWidget)` (Line 120): Custom OpenGL/QPainter 3D rendering widget showing the 4 flyers with high-contrast pill badges, 2.2x default zoom, relative orientations, grips, and head switch lines.
+- `FormationDetailWidget(QWidget)` (Line 850): Side panel with 6 compact tabs (`📖 Continuity`, `📋 Übersicht`, `🔴 Point`, `🟢 OC`, `🔵 IC`, `🟡 Tail`), official Rhythm XP continuity strip image, structured coach tips, bust pitfalls, and 5-step checklist.
+- `FormationExplorerWindow(QMainWindow)` (Line 1133): Full application window with 2x2 category filter buttons (`Alle`, `Randoms`, `Blocks`, `Vertikal`), search filter, `select_formation(code, part)` lifecycle handler, phase slider, and launch button for scoring.
 
 ---
 
@@ -89,6 +89,7 @@ FAI 4-Way Dive Pool database and 3D coordinate definitions.
 
 - `Flyer3DState`: 3D position $(x, y, z)$, yaw rotation, head switch state.
 - `SlotDetail`: Slot name (Point, Outside Center, Inside Center, Tail), color, grip targets.
+- SDC Rhythm XP Standard Colors: `COLOR_POINT` (#EF4444 Red), `COLOR_OC` (#10B981 Green), `COLOR_IC` (#3B82F6 Blue), `COLOR_TAIL` (#EAB308 Yellow).
 - `FormationDefinition`: Code, name, is_block, flyer states for start/close phases, grip definitions.
 - `_build_dive_pool()`: Constructs all 16 Randoms (A–Q) and 22 Blocks (1–22).
 - `get_formation(code: str) -> Optional[FormationDefinition]`: Retrieval helper.
@@ -114,10 +115,12 @@ Persistent training metrics and debrief history manager.
 
 ---
 
-## 📦 `src/card_manager.py` (~75 lines)
-Rhythm XP diagram cards loader and image provider.
+## 📦 `src/card_manager.py` (~115 lines)
+Rhythm XP diagram cards loader and continuity strip provider.
 - `get_card_path(code: str) -> Optional[str]`: Resolves image path for Randoms (`assets/cards/randoms/{CODE}.png`) and Blocks (`assets/cards/blocks/{CODE}.png`).
 - `get_card_pixmap(code: str, max_w, max_h) -> Optional[QPixmap]`: Scaled smooth pixmap.
+- `get_continuity_strip_path(code: str, vertical: bool) -> Optional[str]`: Resolves path to extracted Rhythm XP Continuity Booklet diagram strip (`assets/cards/continuity/{code}.png`).
+- `get_continuity_strip_pixmap(code: str, max_w, max_h, vertical: bool) -> Optional[QPixmap]`: Scaled smooth continuity diagram pixmap.
 
 ---
 
