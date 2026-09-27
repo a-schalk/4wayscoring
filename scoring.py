@@ -22,7 +22,7 @@ import json
 import re
 import locale
 from dataclasses import dataclass, field, asdict
-from typing import List, Optional, Union, Dict
+from typing import List, Optional, Union, Dict, Tuple, Any
 
 # Set C numeric locale before importing mpv
 try:
@@ -41,7 +41,7 @@ from PyQt6.QtWidgets import (
     QFileDialog, QHeaderView, QSplitter, QButtonGroup, QRadioButton,
     QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QProgressBar,
     QMessageBox, QDialog, QTextEdit, QPlainTextEdit, QFrame, QGroupBox, QToolTip,
-    QCheckBox, QAbstractItemView, QMenu, QListWidget, QListWidgetItem
+    QCheckBox, QAbstractItemView, QMenu, QListWidget, QListWidgetItem, QTabWidget
 )
 
 try:
@@ -91,6 +91,73 @@ def parse_formations_string(text: str) -> List[str]:
     return tokens
 
 
+def is_block_formation(code: str) -> bool:
+    """Prüft, ob ein Formations-Code einen FAI-Block (1-22) darstellt."""
+    clean = re.sub(r'[-._].*$', '', code.strip())
+    return clean in FAI_BLOCKS or (clean.isdigit() and 1 <= int(clean) <= 22)
+
+
+def get_block_names(code: str) -> Tuple[str, str]:
+    """Liefert (initial_name, second_name) für einen Block-Code."""
+    clean = re.sub(r'[-._].*$', '', code.strip())
+    name = FAI_BLOCKS.get(clean, "")
+    if " - " in name:
+        parts = name.split(" - ", 1)
+        return parts[0].strip(), parts[1].strip()
+    return name, name
+
+
+def expand_draw_to_points_sequence(draw_tokens: List[str]) -> List[Dict[str, Any]]:
+    """
+    Entfaltet die Draw-Tokens in eine Sequenz gewerteter Punkte für einen Zyklus.
+    - Randoms (A-Q): 1 Punkt (z.B. 'A')
+    - FAI Blöcke (1-22): 2 getrennte Punkte (z.B. '12-1' für Initial und '12-2' für Close)
+    """
+    seq: List[Dict[str, Any]] = []
+    for token in draw_tokens:
+        clean = token.strip().upper()
+        # Falls bereits mit Unterteilung eingegeben (z.B. 12-1 oder 12.2)
+        m = re.match(r'^(\d+)[-._]([12])$', clean)
+        if m:
+            base, part = m.group(1), int(m.group(2))
+            n1, n2 = get_block_names(base)
+            name = n1 if part == 1 else n2
+            seq.append({
+                'code': f"{base}-{part}",
+                'base': base,
+                'part': part,
+                'name': name,
+                'is_block': True
+            })
+        elif is_block_formation(clean):
+            base = re.sub(r'[-._].*$', '', clean)
+            n1, n2 = get_block_names(base)
+            seq.append({
+                'code': f"{base}-1",
+                'base': base,
+                'part': 1,
+                'name': n1,
+                'is_block': True
+            })
+            seq.append({
+                'code': f"{base}-2",
+                'base': base,
+                'part': 2,
+                'name': n2,
+                'is_block': True
+            })
+        else:
+            name = FAI_RANDOMS.get(clean, clean)
+            seq.append({
+                'code': clean,
+                'base': clean,
+                'part': 0,
+                'name': name,
+                'is_block': False
+            })
+    return seq
+
+
 def format_seconds(seconds: Optional[float], show_decimals: bool = True) -> str:
     """Formats float seconds as MM:SS.ss or SS.ss."""
     if seconds is None:
@@ -107,6 +174,30 @@ def format_seconds(seconds: Optional[float], show_decimals: bool = True) -> str:
         if show_decimals:
             return f"{secs:05.2f}s"
         return f"{int(secs):02d}s"
+
+
+def parse_time_string(text: str) -> Optional[float]:
+    """Parst Zeiteingaben (z.B. '01:14.50', '14.5s', '14.5') in Sekunden (float)."""
+    text = text.strip()
+    if not text or text in ("-", "--:--", "--"):
+        return None
+    text = text.rstrip("sS").strip()
+    try:
+        if ":" in text:
+            parts = text.split(":")
+            if len(parts) == 2:
+                mins = float(parts[0])
+                secs = float(parts[1])
+                sign = -1.0 if text.startswith("-") else 1.0
+                return sign * (abs(mins) * 60.0 + abs(secs))
+            elif len(parts) == 3:
+                hrs = float(parts[0])
+                mins = float(parts[1])
+                secs = float(parts[2])
+                return hrs * 3600.0 + mins * 60.0 + secs
+        return float(text)
+    except Exception:
+        return None
 
 
 # =====================================================================
@@ -173,7 +264,7 @@ class ScoringPoint:
     def hold_time(self) -> Optional[float]:
         """Calculates hold duration between completion and key."""
         if self.time_key is not None and self.time_complete is not None:
-            return round(max(0.0, self.time_key - self.time_complete), 3)
+            return round(self.time_key - self.time_complete, 3)
         return None
 
     def transition_time(self, prev_point: Optional['ScoringPoint'], exit_time: Optional[float] = None) -> Optional[float]:
@@ -181,10 +272,16 @@ class ScoringPoint:
         if prev_point is not None:
             ref_time = prev_point.time_key if prev_point.time_key is not None else prev_point.time_complete
             if ref_time is not None:
-                return round(max(0.0, self.time_complete - ref_time), 3)
+                return round(self.time_complete - ref_time, 3)
         elif exit_time is not None:
-            return round(max(0.0, self.time_complete - exit_time), 3)
+            return round(self.time_complete - exit_time, 3)
         return None
+
+    def is_in_working_time(self, exit_time: Optional[float], duration: float = 35.0) -> bool:
+        """Prüft, ob der Punkt innerhalb der Arbeitszeit ab Exit vollendet wurde."""
+        if exit_time is None:
+            return True
+        return self.time_complete <= (exit_time + duration)
 
     def to_dict(self) -> dict:
         return {
@@ -225,6 +322,32 @@ class JumpSession:
     def formations(self) -> List[str]:
         return parse_formations_string(self.draw_string)
 
+    @property
+    def draw_sequence(self) -> List[Dict[str, Any]]:
+        """Returns expanded points sequence for 1 cycle of this draw (Blocks = 2 points)."""
+        return expand_draw_to_points_sequence(self.formations)
+
+    def points_per_cycle(self) -> int:
+        seq = self.draw_sequence
+        return len(seq) if seq else 1
+
+    def expected_formation_for_point(self, point_index: int) -> Dict[str, Any]:
+        """Returns expected formation info dict for a 0-indexed point."""
+        seq = self.draw_sequence
+        if not seq:
+            return {'code': 'A', 'base': 'A', 'part': 0, 'name': 'A', 'is_block': False}
+        idx = point_index % len(seq)
+        return seq[idx]
+
+    def points_in_working_time(self) -> int:
+        """Returns count of approved points completed within working time."""
+        if self.exit_time is None:
+            return self.total_score()
+        return sum(
+            1 for p in self.points
+            if p.status == "APPROVED" and p.is_in_working_time(self.exit_time, self.working_time_duration)
+        )
+
     def total_score(self) -> int:
         return sum(1 for p in self.points if p.status == "APPROVED")
 
@@ -232,7 +355,7 @@ class JumpSession:
         return sum(1 for p in self.points if p.status == "BUST")
 
     def average_hold_time(self) -> Optional[float]:
-        holds = [p.hold_time() for p in self.points if p.hold_time() is not None]
+        holds = [p.hold_time() for p in self.points if p.hold_time() is not None and p.hold_time() >= 0]
         if holds:
             return round(sum(holds) / len(holds), 3)
         return None
@@ -242,7 +365,7 @@ class JumpSession:
         for i, p in enumerate(self.points):
             prev = self.points[i - 1] if i > 0 else None
             t = p.transition_time(prev, self.exit_time)
-            if t is not None:
+            if t is not None and t >= 0:
                 transitions.append(t)
         if transitions:
             return round(sum(transitions) / len(transitions), 3)
@@ -980,14 +1103,22 @@ class ScoringTimelineWidget(QWidget):
             hover_idx = self._find_point_at_x(x)
             if hover_idx is not None:
                 p = self.points[hover_idx]
-                hold_str = f"{p.hold_time():.2f}s" if p.hold_time() is not None else "Kein Key"
+                hold = p.hold_time()
+                hold_str = f"{hold:.2f}s" if hold is not None else "Kein Key"
                 prev = self.points[hover_idx - 1] if hover_idx > 0 else None
-                trans_str = f"{p.transition_time(prev, self.exit_time):.2f}s" if p.transition_time(prev, self.exit_time) is not None else "-"
+                trans = p.transition_time(prev, self.exit_time)
+                trans_str = f"{trans:.2f}s" if trans is not None else "-"
+                wt_str = ""
+                if self.exit_time is not None:
+                    wt_offset = p.time_complete - self.exit_time
+                    wt_str = f" | WT: +{wt_offset:.2f}s"
+                    if not p.is_in_working_time(self.exit_time, self.working_time_duration):
+                        wt_str += " (Out of WT)"
                 QToolTip.showText(
                     event.globalPosition().toPoint(),
                     f"Punkt #{p.point_num} ({p.formation})\n"
                     f"Status: {p.status}\n"
-                    f"Zeit: {format_seconds(p.time_complete)}\n"
+                    f"Zeit: {format_seconds(p.time_complete)}{wt_str}\n"
                     f"Hold: {hold_str} | Transition: {trans_str}\n"
                     f"Notizen: {p.notes or 'Keine'}",
                     self
@@ -1337,6 +1468,7 @@ class DebriefMainWindow(QMainWindow):
         # Status für temporäre Event-Erfassung
         self.pending_complete_time: Optional[float] = None
         self.pending_key_time: Optional[float] = None
+        self.selected_point_index: Optional[int] = None
 
         self._init_ui()
         self._init_timer()
@@ -1376,6 +1508,11 @@ class DebriefMainWindow(QMainWindow):
         self.edit_draw.textChanged.connect(self._on_draw_changed)
         header_layout.addWidget(self.edit_draw)
 
+        self.btn_apply_draw_to_points = QPushButton("🔄 Draw anwenden")
+        self.btn_apply_draw_to_points.setToolTip("Formationen der bereits gewerteten Punkte an die neue Draw-Reihenfolge anpassen")
+        self.btn_apply_draw_to_points.clicked.connect(self._apply_draw_to_existing_points)
+        header_layout.addWidget(self.btn_apply_draw_to_points)
+
         btn_dive_pool = QPushButton("📋 Dive Pool...")
         btn_dive_pool.clicked.connect(self._open_dive_pool_helper)
         header_layout.addWidget(btn_dive_pool)
@@ -1386,8 +1523,8 @@ class DebriefMainWindow(QMainWindow):
         btn_3d_explorer.clicked.connect(self._open_3d_explorer_for_current)
         header_layout.addWidget(btn_3d_explorer)
 
-        btn_shortcuts = QPushButton("⌨️ Shortcuts [F1]")
-        btn_shortcuts.setToolTip("Übersicht aller programmglobalen Tastaturkürzel anzeigen (Taste 'F1')")
+        btn_shortcuts = QPushButton("❓ Hilfe & Shortcuts [F1]")
+        btn_shortcuts.setToolTip("Ausführliche Anleitung zu Wertung, Zeiten, FAI-Blöcken & Tastaturkürzeln (Taste 'F1')")
         btn_shortcuts.clicked.connect(self._show_shortcuts_help)
         header_layout.addWidget(btn_shortcuts)
 
@@ -1777,6 +1914,54 @@ class DebriefMainWindow(QMainWindow):
         table_header_layout.addWidget(btn_clear_points)
         table_card_layout.addLayout(table_header_layout)
 
+        # Selected Point Quick-Edit Toolbar
+        self.selection_bar = QFrame(card_table)
+        self.selection_bar.setObjectName("SelectionBar")
+        self.selection_bar.setStyleSheet(
+            "background-color: #27272a; border: 1px solid #3f3f46; border-radius: 4px; padding: 2px;"
+        )
+        sel_layout = QHBoxLayout(self.selection_bar)
+        sel_layout.setContentsMargins(6, 4, 6, 4)
+        sel_layout.setSpacing(6)
+
+        self.lbl_selected_point_info = QLabel("<i>Kein Punkt ausgewählt (Nächster Punkt wird gewertet)</i>")
+        self.lbl_selected_point_info.setStyleSheet("color: #a1a1aa; font-size: 11px;")
+        sel_layout.addWidget(self.lbl_selected_point_info, 1)
+
+        self.btn_set_sel_complete = QPushButton("⏱️ Fertig = Video (F)")
+        self.btn_set_sel_complete.setFixedHeight(24)
+        self.btn_set_sel_complete.setStyleSheet("background-color: #0284c7; color: white; font-size: 11px; padding: 2px 6px; font-weight: bold;")
+        self.btn_set_sel_complete.setToolTip("Fertig-Zeit des ausgewählten Punkts auf die aktuelle Videozeit setzen (Taste 'F')")
+        self.btn_set_sel_complete.clicked.connect(lambda: self._set_selected_point_complete_to_current())
+        self.btn_set_sel_complete.hide()
+        sel_layout.addWidget(self.btn_set_sel_complete)
+
+        self.btn_set_sel_key = QPushButton("🔑 Key = Video (K)")
+        self.btn_set_sel_key.setFixedHeight(24)
+        self.btn_set_sel_key.setStyleSheet("background-color: #d97706; color: white; font-size: 11px; padding: 2px 6px; font-weight: bold;")
+        self.btn_set_sel_key.setToolTip("Key-Zeit des ausgewählten Punkts auf die aktuelle Videozeit setzen (Taste 'K')")
+        self.btn_set_sel_key.clicked.connect(lambda: self._set_selected_point_key_to_current())
+        self.btn_set_sel_key.hide()
+        sel_layout.addWidget(self.btn_set_sel_key)
+
+        self.btn_toggle_sel_status = QPushButton("✓/✗ Status (S/B)")
+        self.btn_toggle_sel_status.setFixedHeight(24)
+        self.btn_toggle_sel_status.setStyleSheet("background-color: #4b5563; color: white; font-size: 11px; padding: 2px 6px; font-weight: bold;")
+        self.btn_toggle_sel_status.setToolTip("Status des ausgewählten Punkts zwischen SCORE und BUST umschalten (Taste 'S' oder 'B')")
+        self.btn_toggle_sel_status.clicked.connect(self._toggle_selected_point_status)
+        self.btn_toggle_sel_status.hide()
+        sel_layout.addWidget(self.btn_toggle_sel_status)
+
+        self.btn_clear_selection = QPushButton("✕ Abwählen (Esc)")
+        self.btn_clear_selection.setFixedHeight(24)
+        self.btn_clear_selection.setStyleSheet("font-size: 11px; padding: 2px 6px;")
+        self.btn_clear_selection.setToolTip("Auswahl aufheben und zurück zu 'Neuer Punkt' (Taste 'Esc')")
+        self.btn_clear_selection.clicked.connect(self._clear_point_selection)
+        self.btn_clear_selection.hide()
+        sel_layout.addWidget(self.btn_clear_selection)
+
+        table_card_layout.addWidget(self.selection_bar)
+
         self.points_table = QTableWidget(self)
         self.points_table.setColumnCount(8)
         self.points_table.setHorizontalHeaderLabels([
@@ -1786,6 +1971,9 @@ class DebriefMainWindow(QMainWindow):
         self.points_table.horizontalHeader().setSectionResizeMode(7, QHeaderView.ResizeMode.Stretch)
         self.points_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.points_table.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked)
+        self.points_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.points_table.customContextMenuRequested.connect(self._show_table_context_menu)
+        self.points_table.cellDoubleClicked.connect(self._on_table_cell_double_clicked)
         self.points_table.itemClicked.connect(self._on_table_row_clicked)
         self.points_table.itemChanged.connect(self._on_table_item_changed)
         table_card_layout.addWidget(self.points_table)
@@ -2129,11 +2317,14 @@ class DebriefMainWindow(QMainWindow):
         # G. Telestration & Bearbeitung
         # -------------------------------------------------------------
         # 10. Escape: Telestration abbrechen / Cursor-Modus aktivieren
+        # 10. Escape: Telestration abbrechen / Punkt-Auswahl aufheben
         elif key == Qt.Key.Key_Escape:
             is_overlay_active = (hasattr(self, 'container1') and self.container1.overlay.mode != "NONE")
             if not self.btn_tool_none.isChecked() or is_overlay_active:
                 self.btn_tool_none.setChecked(True)
                 self._set_draw_mode("NONE")
+            elif self.selected_point_index is not None:
+                self._clear_point_selection()
             else:
                 if self.pending_complete_time is not None or self.pending_key_time is not None:
                     self.pending_complete_time = None
@@ -2158,26 +2349,96 @@ class DebriefMainWindow(QMainWindow):
         return False
 
     def _show_shortcuts_help(self):
-        """Öffnet einen modalen Dialog mit allen programmglobalen Tastaturkürzeln."""
+        """Öffnet ein ausführliches Hilfe- und Dokumentationsfenster zu Wertung, Zeitmessung und Shortcuts."""
         dlg = QDialog(self)
-        dlg.setWindowTitle("⌨️ Tastaturkürzel Übersicht (Programmglobal)")
-        dlg.resize(540, 580)
+        dlg.setWindowTitle("❓ Hilfe: Wertung, Zeitmessung & Tastaturkürzel")
+        dlg.resize(680, 640)
         dlg_layout = QVBoxLayout(dlg)
-        dlg_layout.setContentsMargins(16, 14, 16, 14)
+        dlg_layout.setContentsMargins(14, 12, 14, 12)
         dlg_layout.setSpacing(10)
 
-        header = QLabel("<h3>Programmglobale Tastaturkürzel</h3>")
-        dlg_layout.addWidget(header)
+        tabs = QTabWidget(dlg)
 
-        info = QLabel(
-            "Alle Tastaturkürzel funktionieren im gesamten Programm, auch wenn Buttons, "
-            "die Zeitleiste oder die Tabelle angeklickt wurden.<br>"
-            "<i>Hinweis: Wenn ein Texteingabefeld (z.B. Draw oder Notiz) aktiv ist, tippen Tasten normal. "
-            "Mit <b>Escape</b> oder <b>Enter</b> verlässt du das Textfeld wieder.</i>"
+        # -------------------------------------------------------------
+        # TAB 1: Wertungs- & Zeitlogik (Debriefing Guide)
+        # -------------------------------------------------------------
+        tab_guide = QWidget()
+        l_guide = QVBoxLayout(tab_guide)
+        l_guide.setContentsMargins(10, 10, 10, 10)
+
+        txt_guide = QTextEdit()
+        txt_guide.setReadOnly(True)
+        txt_guide.setHtml("""
+        <h3 style="color: #38bdf8; margin-top: 0;">⏱️ Wie Zählen, Fertig und Key zusammenarbeiten</h3>
+        <p>In 4-Way Formation Skydiving basiert jedes Debriefing auf drei aufeinander aufbauenden Ereignissen pro Punkt:</p>
+
+        <table border="1" cellpadding="6" cellspacing="0" style="border-collapse: collapse; border-color: #3f3f46; width: 100%;">
+            <tr style="background-color: #27272a;">
+                <th>Ereignis / Taste</th>
+                <th>Bedeutung (FAI Definition)</th>
+                <th>Wirkung im System</th>
+            </tr>
+            <tr>
+                <td><b style="color: #38bdf8;">🏁 Formation Fertig [F]</b><br>(Completion)</td>
+                <td>Der exakte Video-Zeitpunkt, an dem <b>alle 4 Springer alle erforderlichen Griffe</b> der Formation geschlossen haben.</td>
+                <td>Setzt den Griffschluss-Zeitpunkt (<code>Fertig-Zeit</code>). Beendet die Übergangszeit (Transition) der Formation.</td>
+            </tr>
+            <tr>
+                <td><b style="color: #f59e0b;">🔑 Key Gegeben [K]</b><br>(Break / Key)</td>
+                <td>Der Zeitpunkt, an dem der Keyer (z.B. Inside Center oder Point) das <b>Signal zum Bruch</b> der Formation gibt (z.B. Kopfnicken, Griff-Flash).</td>
+                <td>Setzt den <code>Key-Zeitpunkt</code>. Beendet die Haltezeit (Hold Time) dieser Formation und startet die Übergangszeit (Transition) zur nächsten Formation.</td>
+            </tr>
+            <tr>
+                <td><b style="color: #22c55e;">✅ Score (+1) [S]</b><br><b style="color: #ef4444;">❌ Bust (0) [B]</b></td>
+                <td>Die <b>Wertungsentscheidung</b>: Formation war korrekt geflogen und gehalten (+1) oder fehlerhaft / unvollständig / Bust (0).</td>
+                <td>Erstellt und speichert den gewerteten Punkt mit den erfassten Zeiten in der Tabelle und auf der Zeitleiste.</td>
+            </tr>
+        </table>
+
+        <h4 style="color: #e4e4e7; margin-top: 14px;">📐 Berechnung der Zeiten in der Wertungstabelle</h4>
+        <ul>
+            <li><b>Hold Time (Haltezeit):</b>
+                <code>Hold = Key-Zeit - Fertig-Zeit</code><br>
+                Gibt an, wie viele Sekunden die Formation ruhig und sichtbar für den Videographer gehalten wurde. <i>(Ein negativer Wert signalisiert, dass der Key vor dem Griffschluss gesetzt wurde).</i>
+            </li>
+            <li><b>Transition Time (Übergangszeit):</b>
+                <br>• <b>Für Punkt #1:</b> <code>Transition = Fertig-Zeit(1) - Exit-Zeit</code> (Zeit vom Flugzeug-Exit bis zum ersten Griffschluss).
+                <br>• <b>Für Punkt i > 1:</b> <code>Transition = Fertig-Zeit(i) - Key-Zeit(i-1)</code> (Zeit vom Key der Vorformation bis zum Griffschluss der neuen Formation).
+                <br><i>(Wurde beim vorherigen Punkt kein Key markiert, wird ersatzweise die Fertig-Zeit der Vorformation als Referenz herangezogen).</i>
+            </li>
+            <li><b>Working Time (Arbeitszeit):</b>
+                Die offizielle Arbeitszeit beginnt bei <b>Exit [T]</b> (meist 35s im Wettbewerb). Punkte, deren Griffschluss nach Ablauf der Arbeitszeit liegt, werden mit <code>(Out of WT)</code> gekennzeichnet.
+            </li>
+        </ul>
+
+        <h4 style="color: #e4e4e7; margin-top: 14px;">🧩 FAI Blöcke (1-22) = 2 separate Punkte</h4>
+        <p>Ein FAI Block besteht aus zwei eigenständigen Formationen (Initial & Close) mit einer Zwischenbewegung (Inter).
+        Beim Eingeben eines Blocks (z.B. <code>12</code>) erzeugt das System automatisch <b>zwei getrennte Wertungspunkte</b> in der Sequenz:
+        <br>• <b>12-1</b> (Teil 1: Initial-Formation, z.B. Bundy)
+        <br>• <b>12-2</b> (Teil 2: Close-Formation nach dem Inter, z.B. Bundy)</p>
+
+        <h4 style="color: #e4e4e7; margin-top: 14px;">✏️ Nachträgliches Bearbeiten & Draw-Änderung</h4>
+        <ul>
+            <li><b>Punkt korrigieren:</b> Klicke einen Punkt in der Tabelle oder auf der Zeitleiste an. Mit <b>[F]</b> kannst du die Fertig-Zeit und mit <b>[K]</b> die Key-Zeit auf die aktuelle Videoposition korrigieren! Mit <b>[S] / [B]</b> änderst du den Status. Mit <b>Escape</b> hebst du die Auswahl auf.</li>
+            <li><b>Draw nachträglich anpassen:</b> Du hast das Draw falsch eingegeben? Korrigiere einfach das Textfeld und klicke auf <b>[🔄 Draw anwenden]</b>. Alle bereits gewerteten Punkte erhalten die neuen Formationsbezeichnungen, während alle Zeiten und Notizen erhalten bleiben!</li>
+        </ul>
+        """)
+        l_guide.addWidget(txt_guide)
+        tabs.addTab(tab_guide, "⏱️ Wertungs- & Zeitlogik")
+
+        # -------------------------------------------------------------
+        # TAB 2: Tastaturkürzel
+        # -------------------------------------------------------------
+        tab_shortcuts = QWidget()
+        l_shortcuts = QVBoxLayout(tab_shortcuts)
+        l_shortcuts.setContentsMargins(10, 10, 10, 10)
+
+        lbl_sc_info = QLabel(
+            "Alle Tastaturkürzel funktionieren im gesamten Programm zuverlässig.<br>"
+            "<i>(Bei aktiver Texteingabe tippen Tasten normal. Mit <b>Escape</b> oder <b>Enter</b> verlässt du Textfelder).</i>"
         )
-        info.setWordWrap(True)
-        info.setStyleSheet("color: #a1a1aa; font-size: 11px;")
-        dlg_layout.addWidget(info)
+        lbl_sc_info.setStyleSheet("color: #a1a1aa; font-size: 11px;")
+        l_shortcuts.addWidget(lbl_sc_info)
 
         shortcuts_table = QTableWidget(dlg)
         shortcuts_table.setColumnCount(2)
@@ -2194,20 +2455,20 @@ class DebriefMainWindow(QMainWindow):
             ("Shift + Pfeil Rechts", "1 Sekunde vorwärts springen"),
             ("Shift + Pfeil Links", "1 Sekunde rückwärts springen"),
             ("T", "Exit-Zeitpunkt / Working Time Timer Start setzen"),
-            ("F", "Formation fertig markieren (Griffe geschlossen)"),
-            ("K", "Key markieren (Schlüssel gegeben / Bruch)"),
-            ("S  oder  1", "Punkt anerkennen & werten (+1 SCORE)"),
-            ("B  oder  0", "Fehler / Bust werten (0 BUST)"),
+            ("F", "Formation Fertig markieren (bei Auswahl: Fertig-Zeit des Punkts korrigieren)"),
+            ("K", "Key markieren (bei Auswahl: Key-Zeit des Punkts korrigieren)"),
+            ("S  oder  1", "Punkt anerkennen & werten (+1 SCORE / Status ändern)"),
+            ("B  oder  0", "Fehler / Bust werten (0 BUST / Status ändern)"),
             ("[  oder  I", "Start Frame für Videoschnitt setzen (In-Point)"),
             ("]  oder  O", "End Frame für Videoschnitt setzen (Out-Point)"),
             ("Entf / Backspace", "Ausgewählten Punkt aus Wertung löschen"),
-            ("Pfeil Oben / Unten", "In Wertungstabelle navigieren (springt zum Punkt)"),
+            ("Pfeil Oben / Unten", "In Wertungstabelle navigieren (springt zum Punkt im Video)"),
             ("Strg + Z", "Letzte Telestration-Zeichnung rückgängig"),
-            ("Escape", "Telestration abbrechen / Cursor-Modus aktivieren"),
+            ("Escape", "Telestration zurücksetzen / Punkt-Auswahl aufheben"),
             ("Strg + S", "Session speichern (.json)"),
             ("Strg + O", "Session laden (.json)"),
             ("Strg + E", "Debriefing Report exportieren (.md)"),
-            ("F1", "Diese Tastaturkürzel-Hilfe anzeigen"),
+            ("F1", "Diese Hilfe & Dokumentation anzeigen"),
         ]
 
         shortcuts_table.setRowCount(len(items))
@@ -2220,7 +2481,10 @@ class DebriefMainWindow(QMainWindow):
             item_d = QTableWidgetItem(desc_txt)
             shortcuts_table.setItem(row, 1, item_d)
 
-        dlg_layout.addWidget(shortcuts_table)
+        l_shortcuts.addWidget(shortcuts_table)
+        tabs.addTab(tab_shortcuts, "⌨️ Tastaturkürzel")
+
+        dlg_layout.addWidget(tabs)
 
         btn_box = QHBoxLayout()
         btn_box.addStretch()
@@ -2591,6 +2855,34 @@ class DebriefMainWindow(QMainWindow):
         self._update_sequence_chips()
         self._update_next_formation_indicator()
 
+    def _apply_draw_to_existing_points(self):
+        """Passt die Formationsbezeichnungen aller bestehenden Punkte an die aktuelle Draw-Sequenz an."""
+        if not self.session.points:
+            QMessageBox.information(self, "Keine Punkte", "Es sind noch keine Punkte zum Anpassen vorhanden.")
+            return
+
+        seq = self.session.draw_sequence
+        if not seq:
+            QMessageBox.warning(self, "Ungültiges Draw", "Bitte gib eine gültige Draw-Sequenz ein (z.B. A - 12 - 7 - B).")
+            return
+
+        reply = QMessageBox.question(
+            self, "Draw auf Punkte anwenden?",
+            f"Möchtest du die Formationen aller {len(self.session.points)} gewerteten Punkte an die Sequenz:\n"
+            f"'{self.session.draw_string}' anpassen?\n\n"
+            f"Alle gemessenen Zeiten, Keys, Status (Score/Bust) und Notizen bleiben unverändert erhalten!",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            for i, pt in enumerate(self.session.points):
+                info = self.session.expected_formation_for_point(i)
+                pt.formation = info['code']
+            self._update_sequence_chips()
+            self._update_next_formation_indicator()
+            self._update_table_and_stats()
+            self._update_selection_controls()
+            QMessageBox.information(self, "Erfolgreich", "Formationen der Punkte wurden erfolgreich an das neue Draw angepasst.")
+
     def _update_sequence_chips(self):
         # Vorherige Widgets im Chip Layout leeren
         while self.chips_layout.count():
@@ -2598,34 +2890,43 @@ class DebriefMainWindow(QMainWindow):
             if item.widget():
                 item.widget().deleteLater()
 
-        forms = self.session.formations
-        if not forms:
+        seq = self.session.draw_sequence
+        if not seq:
             lbl = QLabel("<i>Keine Formationen eingegeben (z.B. A - 12 - 7 - B)</i>")
             lbl.setStyleSheet("color: #71717a;")
             self.chips_layout.addWidget(lbl)
             self.chips_layout.addStretch()
             return
 
-        next_idx = len(self.session.points) % len(forms)
+        next_idx = len(self.session.points) % len(seq)
 
-        for i, code in enumerate(forms):
+        for i, info in enumerate(seq):
+            code = info['code']
+            base = info['base']
+            part = info['part']
+            name = info['name']
+
             chip = QPushButton(f"<b>{code}</b>")
             chip.setCursor(Qt.CursorShape.PointingHandCursor)
             chip.setFixedHeight(28)
             chip.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-            f_name = FAI_RANDOMS.get(code, FAI_BLOCKS.get(code, ""))
-            if f_name:
-                chip.setToolTip(f"{code}: {f_name}\nKlicke, um diese Formation in 3D zu visualisieren")
-            chip.clicked.connect(lambda checked, c=code: self._open_3d_explorer_for_code(c))
+
+            part_tip = f" (Block {base} Teil {part})" if info['is_block'] else ""
+            chip.setToolTip(f"{code}{part_tip}: {name}\nKlicke, um diese Formation in 3D zu visualisieren")
+            chip.clicked.connect(lambda checked=False, b=base, p=part: self._open_3d_explorer_for_formation(b, p))
 
             if i == next_idx:
-                chip.setStyleSheet("background-color: #38bdf8; color: black; font-weight: bold; border-radius: 4px; padding: 2px 10px;")
+                chip.setStyleSheet(
+                    "background-color: #38bdf8; color: black; font-weight: bold; border-radius: 4px; padding: 2px 10px;"
+                )
             else:
-                chip.setStyleSheet("background-color: #3f3f46; color: #f4f4f5; border-radius: 4px; padding: 2px 8px;")
+                chip.setStyleSheet(
+                    "background-color: #3f3f46; color: #f4f4f5; border-radius: 4px; padding: 2px 8px;"
+                )
 
             self.chips_layout.addWidget(chip)
 
-            if i < len(forms) - 1:
+            if i < len(seq) - 1:
                 arrow = QLabel("➔")
                 arrow.setStyleSheet("color: #71717a; font-weight: bold;")
                 self.chips_layout.addWidget(arrow)
@@ -2633,44 +2934,61 @@ class DebriefMainWindow(QMainWindow):
         self.chips_layout.addStretch()
 
     def _open_3d_explorer_for_current(self):
-        next_code = self._get_next_expected_formation()
-        if not next_code or next_code == "-":
-            next_code = "21"
-        self._open_3d_explorer_for_code(next_code)
+        info = self._get_next_expected_formation_info()
+        self._open_3d_explorer_for_formation(info['base'], info['part'])
 
-    def _open_3d_explorer_for_code(self, code: str):
+    def _open_3d_explorer_for_formation(self, base_code: str, part: int = 0):
         try:
             import formation_tool
             import formation_db
+            clean_base = re.sub(r'[-._].*$', '', base_code.strip())
             if not hasattr(self, "_formation_explorer_window") or self._formation_explorer_window is None:
-                self._formation_explorer_window = formation_tool.FormationExplorerWindow(code)
+                self._formation_explorer_window = formation_tool.FormationExplorerWindow(clean_base)
             else:
-                f = formation_db.get_formation(code)
+                f = formation_db.get_formation(clean_base)
                 if f:
                     self._formation_explorer_window.viewport_3d.set_formation(f)
                     self._formation_explorer_window.detail_widget.set_formation(f)
+                    for i in range(self._formation_explorer_window.combo_formation.count()):
+                        txt = self._formation_explorer_window.combo_formation.itemText(i)
+                        if txt.startswith(f"{f.code} -"):
+                            self._formation_explorer_window.combo_formation.setCurrentIndex(i)
+                            break
+
+            if part == 2 and hasattr(self._formation_explorer_window, 'slider_phase'):
+                self._formation_explorer_window.slider_phase.setValue(100)
+            elif part == 1 and hasattr(self._formation_explorer_window, 'slider_phase'):
+                self._formation_explorer_window.slider_phase.setValue(0)
+
             self._formation_explorer_window.show()
             self._formation_explorer_window.raise_()
             self._formation_explorer_window.activateWindow()
         except Exception as e:
             QMessageBox.warning(self, "Fehler", f"3D Explorer konnte nicht geöffnet werden: {e}")
 
+    def _open_3d_explorer_for_code(self, code: str):
+        self._open_3d_explorer_for_formation(code, 0)
+
+    def _get_next_expected_formation_info(self) -> Dict[str, Any]:
+        return self.session.expected_formation_for_point(len(self.session.points))
+
     def _get_next_expected_formation(self) -> str:
-        forms = self.session.formations
-        if not forms:
-            return "A"
-        idx = len(self.session.points) % len(forms)
-        return forms[idx]
+        return self._get_next_expected_formation_info()['code']
 
     def _update_next_formation_indicator(self):
-        forms = self.session.formations
-        next_form = self._get_next_expected_formation()
+        info = self._get_next_expected_formation_info()
+        next_form = info['code']
         pt_num = len(self.session.points) + 1
-        cycle = (len(self.session.points) // len(forms) + 1) if forms else 1
-        f_name = FAI_RANDOMS.get(next_form, FAI_BLOCKS.get(next_form, ""))
-        sub_text = f" ({f_name})" if f_name else ""
+        seq_len = self.session.points_per_cycle()
+        cycle = (len(self.session.points) // seq_len + 1) if seq_len else 1
+
+        detail = f" ({info['name']})" if info.get('name') else ""
+        if info.get('is_block'):
+            p_desc = "Initial" if info.get('part') == 1 else "Close"
+            detail = f" (Block {info['base']} Teil {info['part']}: {p_desc} &ndash; {info['name']})"
+
         self.lbl_next_formation.setText(
-            f"Nächste Formation: <b>{next_form}</b>{sub_text} &nbsp;|&nbsp; <b>Punkt #{pt_num}</b> (Zyklus {cycle})"
+            f"Nächste Formation: <b>{next_form}</b>{detail} &nbsp;|&nbsp; <b>Punkt #{pt_num}</b> (Zyklus {cycle})"
         )
 
     # -----------------------------------------------------------------
@@ -2684,6 +3002,7 @@ class DebriefMainWindow(QMainWindow):
         elif "60s" in text:
             self.session.working_time_duration = 60.0
         self.timeline_widget.set_working_time(self.session.exit_time, self.session.working_time_duration)
+        self._update_table_and_stats()
 
     def _set_exit_timer_now(self):
         t = self.container1.mpv_widget.get_time()
@@ -2703,10 +3022,176 @@ class DebriefMainWindow(QMainWindow):
     # -----------------------------------------------------------------
     # Formation Finished, Key Given & Point Judging
     # -----------------------------------------------------------------
+    def _update_selection_controls(self):
+        """Aktualisiert die Aktionsleiste für den ausgewählten Punkt."""
+        has_sel = (self.selected_point_index is not None and 0 <= self.selected_point_index < len(self.session.points))
+        if hasattr(self, 'btn_set_sel_complete'):
+            self.btn_set_sel_complete.setVisible(has_sel)
+            self.btn_set_sel_key.setVisible(has_sel)
+            self.btn_toggle_sel_status.setVisible(has_sel)
+            self.btn_clear_selection.setVisible(has_sel)
+
+            if has_sel:
+                pt = self.session.points[self.selected_point_index]
+                self.selection_bar.setStyleSheet(
+                    "background-color: #1e293b; border: 1px solid #38bdf8; border-radius: 4px; padding: 2px;"
+                )
+                self.lbl_selected_point_info.setText(
+                    f"🎯 <b>Punkt #{pt.point_num} ({pt.formation}) ausgewählt</b> | Status: <b>{pt.status}</b> | "
+                    f"Fertig: {format_seconds(pt.time_complete)} | Key: {format_seconds(pt.time_key)}"
+                )
+                self.lbl_selected_point_info.setStyleSheet("color: #38bdf8; font-size: 11px;")
+            else:
+                self.selection_bar.setStyleSheet(
+                    "background-color: #27272a; border: 1px solid #3f3f46; border-radius: 4px; padding: 2px;"
+                )
+                pt_num = len(self.session.points) + 1
+                next_f = self._get_next_expected_formation()
+                self.lbl_selected_point_info.setText(
+                    f"<i>Kein Punkt ausgewählt &ndash; Nächster Punkt #{pt_num} ({next_f}) wird bei S/B gewertet</i>"
+                )
+                self.lbl_selected_point_info.setStyleSheet("color: #a1a1aa; font-size: 11px;")
+
+    def _set_selected_point_complete_to_current(self, t: Optional[float] = None):
+        if self.selected_point_index is None or not (0 <= self.selected_point_index < len(self.session.points)):
+            return
+        if t is None:
+            t = self.container1.mpv_widget.get_time()
+            if t is None:
+                t = getattr(self.timeline_widget, 'current_time', 0.0)
+        pt = self.session.points[self.selected_point_index]
+        pt.time_complete = t
+
+        # Falls Punkte zeitlich aus der Reihenfolge geraten sind, sortieren
+        if len(self.session.points) > 1:
+            self.session.points.sort(key=lambda p: p.time_complete)
+            for i, p in enumerate(self.session.points):
+                p.point_num = i + 1
+            self.selected_point_index = self.session.points.index(pt)
+            self.points_table.selectRow(self.selected_point_index)
+
+        self._update_table_and_stats()
+        self._update_selection_controls()
+        self.lbl_pending_event.setText(f"⏱️ Punkt #{pt.point_num} ({pt.formation}) Fertig-Zeit auf {format_seconds(t)} gesetzt")
+        self.lbl_pending_event.setStyleSheet("color: #38bdf8; font-weight: bold;")
+
+    def _set_selected_point_key_to_current(self, t: Optional[float] = None):
+        if self.selected_point_index is None or not (0 <= self.selected_point_index < len(self.session.points)):
+            return
+        if t is None:
+            t = self.container1.mpv_widget.get_time()
+            if t is None:
+                t = getattr(self.timeline_widget, 'current_time', 0.0)
+        pt = self.session.points[self.selected_point_index]
+        pt.time_key = t
+        hold = pt.hold_time()
+        hold_str = f" (Hold: {hold:.2f}s)" if hold is not None else ""
+        self._update_table_and_stats()
+        self._update_selection_controls()
+        self.lbl_pending_event.setText(f"🔑 Punkt #{pt.point_num} ({pt.formation}) Key-Zeit auf {format_seconds(t)}{hold_str} gesetzt")
+        self.lbl_pending_event.setStyleSheet("color: #f59e0b; font-weight: bold;")
+
+    def _clear_selected_point_key(self):
+        if self.selected_point_index is None or not (0 <= self.selected_point_index < len(self.session.points)):
+            return
+        pt = self.session.points[self.selected_point_index]
+        pt.time_key = None
+        self._update_table_and_stats()
+        self._update_selection_controls()
+        self.lbl_pending_event.setText(f"Key-Zeit für Punkt #{pt.point_num} entfernt")
+        self.lbl_pending_event.setStyleSheet("color: #a1a1aa;")
+
+    def _set_selected_point_status(self, status: str):
+        if self.selected_point_index is None or not (0 <= self.selected_point_index < len(self.session.points)):
+            return
+        pt = self.session.points[self.selected_point_index]
+        pt.status = status
+        self._update_table_and_stats()
+        self._update_selection_controls()
+        self.lbl_pending_event.setText(f"Punkt #{pt.point_num} ({pt.formation}) Status auf {status} geändert")
+        self.lbl_pending_event.setStyleSheet("color: #22c55e;" if status == "APPROVED" else "color: #ef4444;")
+
+    def _toggle_selected_point_status(self):
+        if self.selected_point_index is None or not (0 <= self.selected_point_index < len(self.session.points)):
+            return
+        pt = self.session.points[self.selected_point_index]
+        new_status = "BUST" if pt.status == "APPROVED" else "APPROVED"
+        self._set_selected_point_status(new_status)
+
+    def _clear_point_selection(self):
+        self.selected_point_index = None
+        self.points_table.clearSelection()
+        self.timeline_widget.set_points(self.session.points, selected_idx=None)
+        self._update_selection_controls()
+        self.lbl_pending_event.setText("Auswahl aufgehoben &ndash; Bereit für Wertung")
+        self.lbl_pending_event.setStyleSheet("color: #a1a1aa; font-size: 11px;")
+
+    def _show_table_context_menu(self, pos: QPoint):
+        item = self.points_table.itemAt(pos)
+        if not item:
+            return
+        row = item.row()
+        if not (0 <= row < len(self.session.points)):
+            return
+
+        self.selected_point_index = row
+        self.points_table.selectRow(row)
+        self._update_selection_controls()
+        pt = self.session.points[row]
+
+        cur_t = self.container1.mpv_widget.get_time()
+        if cur_t is None:
+            cur_t = getattr(self.timeline_widget, 'current_time', 0.0)
+
+        menu = QMenu(self)
+        menu.addSection(f"Punkt #{pt.point_num} ({pt.formation})")
+
+        act_f = menu.addAction(f"⏱️ Fertig-Zeit = aktuelle Videoposition ({format_seconds(cur_t)}) [F]")
+        act_f.triggered.connect(lambda: self._set_selected_point_complete_to_current(cur_t))
+
+        act_k = menu.addAction(f"🔑 Key-Zeit = aktuelle Videoposition ({format_seconds(cur_t)}) [K]")
+        act_k.triggered.connect(lambda: self._set_selected_point_key_to_current(cur_t))
+
+        if pt.time_key is not None:
+            act_k_clear = menu.addAction("🗑️ Key-Zeit entfernen")
+            act_k_clear.triggered.connect(self._clear_selected_point_key)
+
+        menu.addSeparator()
+        if pt.status == "APPROVED":
+            act_st = menu.addAction("❌ Als BUST (0) werten [B]")
+            act_st.triggered.connect(lambda: self._set_selected_point_status("BUST"))
+        else:
+            act_st = menu.addAction("✅ Als SCORE (+1) werten [S]")
+            act_st.triggered.connect(lambda: self._set_selected_point_status("APPROVED"))
+
+        act_seek = menu.addAction(f"▶ Zum Punkt im Video springen ({format_seconds(pt.time_complete)})")
+        act_seek.triggered.connect(lambda: self._seek_to_time(pt.time_complete))
+
+        menu.addSeparator()
+        act_del = menu.addAction("🗑️ Diesen Punkt löschen [Entf]")
+        act_del.triggered.connect(self._delete_selected_point)
+
+        menu.exec(self.points_table.viewport().mapToGlobal(pos))
+
+    def _on_table_cell_double_clicked(self, row: int, col: int):
+        if 0 <= row < len(self.session.points):
+            pt = self.session.points[row]
+            if col == 2:  # Status column: toggle on double click
+                new_status = "BUST" if pt.status == "APPROVED" else "APPROVED"
+                pt.status = new_status
+                self._update_table_and_stats()
+                self._update_selection_controls()
+
     def _mark_formation_complete(self):
         t = self.container1.mpv_widget.get_time()
         if t is None:
             t = getattr(self.timeline_widget, 'current_time', 0.0)
+
+        # Wenn ein Punkt ausgewählt ist: Fertig-Zeit des ausgewählten Punkts aktualisieren!
+        if self.selected_point_index is not None and 0 <= self.selected_point_index < len(self.session.points):
+            self._set_selected_point_complete_to_current(t)
+            return
+
         self.pending_complete_time = t
         diff_exit = (t - self.session.exit_time) if self.session.exit_time is not None else None
         exit_str = f" (+{diff_exit:.2f}s nach Exit)" if diff_exit is not None else ""
@@ -2717,17 +3202,24 @@ class DebriefMainWindow(QMainWindow):
         t = self.container1.mpv_widget.get_time()
         if t is None:
             t = getattr(self.timeline_widget, 'current_time', 0.0)
+
+        # Wenn ein Punkt ausgewählt ist: Key-Zeit des ausgewählten Punkts aktualisieren!
+        if self.selected_point_index is not None and 0 <= self.selected_point_index < len(self.session.points):
+            self._set_selected_point_key_to_current(t)
+            return
+
         self.pending_key_time = t
         hold_str = ""
         if self.pending_complete_time is not None:
-            hold = max(0.0, t - self.pending_complete_time)
+            hold = t - self.pending_complete_time
             hold_str = f" (Hold: {hold:.2f}s)"
         elif self.session.points:
-            # Falls Key nach dem Werten gedrückt wurde: aktuellem letzten Punkt zuweisen!
+            # Falls Key nach dem Werten gedrückt wurde: letztem Punkt zuweisen!
             last_pt = self.session.points[-1]
             if last_pt.time_key is None:
                 last_pt.time_key = t
                 self._update_table_and_stats()
+                self._update_selection_controls()
                 self.lbl_pending_event.setText(f"🔑 Key zu Punkt #{last_pt.point_num} hinzugefügt ({format_seconds(t)})")
                 self.lbl_pending_event.setStyleSheet("color: #f59e0b; font-weight: bold;")
                 return
@@ -2736,11 +3228,15 @@ class DebriefMainWindow(QMainWindow):
         self.lbl_pending_event.setStyleSheet("color: #f59e0b; font-weight: bold;")
 
     def _judge_point(self, status: str):
+        # Wenn ein Punkt ausgewählt ist: Status des ausgewählten Punkts umschalten/setzen!
+        if self.selected_point_index is not None and 0 <= self.selected_point_index < len(self.session.points):
+            self._set_selected_point_status(status)
+            return
+
         cur_t = self.container1.mpv_widget.get_time()
         if cur_t is None:
             cur_t = getattr(self.timeline_widget, 'current_time', 0.0)
 
-        # Falls Formation Fertig nicht vorab gesetzt wurde, aktuellen Zeitpunkt nehmen
         comp_time = self.pending_complete_time if self.pending_complete_time is not None else cur_t
         key_time = self.pending_key_time
 
@@ -2756,15 +3252,22 @@ class DebriefMainWindow(QMainWindow):
         )
         self.session.points.append(new_point)
 
+        # Chronologisch sortieren, falls Zeit vor dem vorherigen Punkt lag
+        if len(self.session.points) > 1 and new_point.time_complete < self.session.points[-2].time_complete:
+            self.session.points.sort(key=lambda p: p.time_complete)
+            for i, p in enumerate(self.session.points):
+                p.point_num = i + 1
+
         # Reset pending events
         self.pending_complete_time = None
         self.pending_key_time = None
-        self.lbl_pending_event.setText(f"Punkt #{point_num} ({formation}) als {status} gewertet")
+        self.lbl_pending_event.setText(f"Punkt #{new_point.point_num} ({new_point.formation}) als {status} gewertet")
         self.lbl_pending_event.setStyleSheet("color: #22c55e;" if status == "APPROVED" else "color: #ef4444;")
 
         self._update_sequence_chips()
         self._update_next_formation_indicator()
         self._update_table_and_stats()
+        self._update_selection_controls()
 
     # -----------------------------------------------------------------
     # Table & Statistics Update
@@ -2784,62 +3287,122 @@ class DebriefMainWindow(QMainWindow):
             # Formation
             item_form = QTableWidgetItem(pt.formation)
             item_form.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            base = re.sub(r'[-._].*$', '', pt.formation)
+            if base in FAI_BLOCKS:
+                m = re.search(r'[-._]([12])$', pt.formation)
+                part = int(m.group(1)) if m else 1
+                n1, n2 = get_block_names(base)
+                f_name = n1 if part == 1 else n2
+                item_form.setToolTip(f"Block {base} (Teil {part}/2): {f_name}\nDoppelklick zum Ändern")
+            elif base in FAI_RANDOMS:
+                item_form.setToolTip(f"Random {base}: {FAI_RANDOMS[base]}\nDoppelklick zum Ändern")
             self.points_table.setItem(i, 1, item_form)
 
             # Status
             is_approved = (pt.status == "APPROVED")
-            status_text = "✓ SCORE (+1)" if is_approved else "✗ BUST (0)"
-            item_status = QTableWidgetItem(status_text)
+            in_wt = pt.is_in_working_time(self.session.exit_time, self.session.working_time_duration)
+            if not in_wt and self.session.exit_time is not None:
+                status_text = "✓ SCORE (Out of WT)" if is_approved else "✗ BUST (Out of WT)"
+                item_status = QTableWidgetItem(status_text)
+                item_status.setForeground(QColor(234, 179, 8))
+                item_status.setToolTip("Dieser Punkt wurde nach Ablauf der Working Time gewertet!\nDoppelklick zum Umschalten")
+            else:
+                status_text = "✓ SCORE (+1)" if is_approved else "✗ BUST (0)"
+                item_status = QTableWidgetItem(status_text)
+                item_status.setForeground(QColor(34, 197, 94) if is_approved else QColor(239, 68, 68))
+                item_status.setToolTip("Doppelklick zum Umschalten zwischen SCORE und BUST")
             item_status.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            item_status.setForeground(QColor(34, 197, 94) if is_approved else QColor(239, 68, 68))
             item_status.setFont(QFont("Arial", 9, QFont.Weight.Bold))
             self.points_table.setItem(i, 2, item_status)
 
             # Fertig Zeit
+            wt_offset = (pt.time_complete - self.session.exit_time) if self.session.exit_time is not None else None
+            comp_tip = f"Videozeit: {format_seconds(pt.time_complete)}"
+            if wt_offset is not None:
+                comp_tip += f"\nArbeitszeit: +{wt_offset:.2f}s nach Exit"
             item_comp = QTableWidgetItem(format_seconds(pt.time_complete))
             item_comp.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            item_comp.setToolTip(f"{comp_tip}\nDoppelklick zum Bearbeiten der Zeit")
             self.points_table.setItem(i, 3, item_comp)
 
             # Key Zeit
             key_str = format_seconds(pt.time_key) if pt.time_key is not None else "-"
             item_key = QTableWidgetItem(key_str)
             item_key.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            if pt.time_key is not None and self.session.exit_time is not None:
+                key_wt = pt.time_key - self.session.exit_time
+                item_key.setToolTip(f"Videozeit: {format_seconds(pt.time_key)}\nArbeitszeit: +{key_wt:.2f}s nach Exit\nDoppelklick zum Bearbeiten")
+            else:
+                item_key.setToolTip("Doppelklick zum Eingeben der Key-Zeit")
             self.points_table.setItem(i, 4, item_key)
 
             # Hold Time
             hold = pt.hold_time()
-            hold_str = f"{hold:.2f}s" if hold is not None else "-"
-            item_hold = QTableWidgetItem(hold_str)
-            item_hold.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             if hold is not None:
-                item_hold.setForeground(QColor(251, 191, 36))
+                if hold < 0:
+                    hold_str = f"⚠️ {hold:.2f}s"
+                    item_hold = QTableWidgetItem(hold_str)
+                    item_hold.setForeground(QColor(239, 68, 68))
+                    item_hold.setToolTip(f"Achtung: Key ({format_seconds(pt.time_key)}) liegt VOR Fertig-Zeit ({format_seconds(pt.time_complete)})!")
+                else:
+                    hold_str = f"{hold:.2f}s"
+                    item_hold = QTableWidgetItem(hold_str)
+                    item_hold.setForeground(QColor(251, 191, 36))
+                    item_hold.setToolTip(f"Haltezeit: {hold:.2f}s (von Griffschluss bis Key)")
+            else:
+                item_hold = QTableWidgetItem("-")
+                item_hold.setToolTip("Keine Key-Zeit gesetzt (Taste 'K' drücken)")
+            item_hold.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.points_table.setItem(i, 5, item_hold)
 
             # Transition Time
             prev = self.session.points[i - 1] if i > 0 else None
             trans = pt.transition_time(prev, self.session.exit_time)
-            trans_str = f"{trans:.2f}s" if trans is not None else "-"
-            item_trans = QTableWidgetItem(trans_str)
-            item_trans.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             if trans is not None:
-                item_trans.setForeground(QColor(56, 189, 248))
+                if trans < 0:
+                    trans_str = f"⚠️ {trans:.2f}s"
+                    item_trans = QTableWidgetItem(trans_str)
+                    item_trans.setForeground(QColor(239, 68, 68))
+                    item_trans.setToolTip("Achtung: Fertig-Zeit liegt vor dem vorherigen Key/Exit!")
+                else:
+                    trans_str = f"{trans:.2f}s"
+                    item_trans = QTableWidgetItem(trans_str)
+                    item_trans.setForeground(QColor(56, 189, 248))
+                    if i == 0:
+                        item_trans.setToolTip(f"Übergangszeit vom Exit ({format_seconds(self.session.exit_time)}) bis Punkt #1")
+                    else:
+                        ref_txt = f"Key #{prev.point_num}" if prev.time_key is not None else f"Fertig #{prev.point_num}"
+                        item_trans.setToolTip(f"Übergangszeit von {ref_txt} bis Griffschluss #{pt.point_num}")
+            else:
+                item_trans = QTableWidgetItem("-")
+                if i == 0:
+                    item_trans.setToolTip("Exit-Zeitpunkt nicht gesetzt (Taste 'T' drücken)")
+                else:
+                    item_trans.setToolTip("Vorheriger Referenzzeitpunkt fehlt")
+            item_trans.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.points_table.setItem(i, 6, item_trans)
 
             # Notiz
             item_notes = QTableWidgetItem(pt.notes)
+            item_notes.setToolTip("Doppelklick zum Bearbeiten der Debrief-Notiz")
             self.points_table.setItem(i, 7, item_notes)
 
         self.points_table.blockSignals(False)
 
         # Timeline aktualisieren
-        self.timeline_widget.set_points(self.session.points)
+        self.timeline_widget.set_points(self.session.points, selected_idx=self.selected_point_index)
 
         # Scoreboard aktualisieren
         score = self.session.total_score()
+        score_wt = self.session.points_in_working_time()
         busts = self.session.total_busts()
         total = len(self.session.points)
 
-        self.lbl_score_display.setText(f"PUNKTE: {score}")
+        score_text = f"PUNKTE: {score}"
+        if score != score_wt and self.session.exit_time is not None:
+            score_text += f" ({score_wt} in WT)"
+
+        self.lbl_score_display.setText(score_text)
         self.lbl_bust_display.setText(f"BUSTS: {busts}")
         self.lbl_total_attempted.setText(f"GESAMT: {total}")
 
@@ -2864,40 +3427,87 @@ class DebriefMainWindow(QMainWindow):
     def _on_table_row_clicked(self, item: QTableWidgetItem):
         row = item.row()
         if 0 <= row < len(self.session.points):
+            self.selected_point_index = row
             pt = self.session.points[row]
             self.timeline_widget.set_points(self.session.points, selected_idx=row)
             self._seek_to_time(pt.time_complete)
+            self._update_selection_controls()
 
     def _on_table_current_changed(self, current_row: int, current_col: int, prev_row: int, prev_col: int):
         if self.points_table.signalsBlocked():
             return
         if 0 <= current_row < len(self.session.points):
+            self.selected_point_index = current_row
             pt = self.session.points[current_row]
             self.timeline_widget.set_points(self.session.points, selected_idx=current_row)
             self._seek_to_time(pt.time_complete)
+            self._update_selection_controls()
 
     def _on_table_item_changed(self, item: QTableWidgetItem):
+        if self.points_table.signalsBlocked():
+            return
         row = item.row()
         col = item.column()
-        if 0 <= row < len(self.session.points):
-            pt = self.session.points[row]
-            if col == 1:  # Formation geändert
-                pt.formation = item.text().strip().upper()
+        if not (0 <= row < len(self.session.points)):
+            return
+
+        pt = self.session.points[row]
+        if col == 1:  # Formation geändert
+            val = item.text().strip().upper()
+            if val:
+                pt.formation = val
+                self._update_sequence_chips()
+                self._update_next_formation_indicator()
                 self._update_table_and_stats()
-            elif col == 7:  # Notiz geändert
-                pt.notes = item.text()
+                self._update_selection_controls()
+        elif col == 2:  # Status geändert
+            val = item.text().strip().upper()
+            if "BUST" in val or "0" in val or "✗" in val:
+                pt.status = "BUST"
+            else:
+                pt.status = "APPROVED"
+            self._update_table_and_stats()
+            self._update_selection_controls()
+        elif col == 3:  # Fertig-Zeit geändert
+            parsed = parse_time_string(item.text())
+            if parsed is not None:
+                pt.time_complete = parsed
+                if len(self.session.points) > 1:
+                    self.session.points.sort(key=lambda p: p.time_complete)
+                    for i, p in enumerate(self.session.points):
+                        p.point_num = i + 1
+                    self.selected_point_index = self.session.points.index(pt)
+                self._update_table_and_stats()
+                self._update_selection_controls()
+            else:
+                self._update_table_and_stats()
+        elif col == 4:  # Key-Zeit geändert
+            parsed = parse_time_string(item.text())
+            pt.time_key = parsed
+            self._update_table_and_stats()
+            self._update_selection_controls()
+        elif col == 7:  # Notiz geändert
+            pt.notes = item.text()
 
     def _on_timeline_point_clicked(self, idx: int):
         if 0 <= idx < len(self.session.points):
+            self.selected_point_index = idx
             self.points_table.selectRow(idx)
+            self._update_selection_controls()
 
     def _delete_selected_point(self):
         row = self.points_table.currentRow()
+        if not (0 <= row < len(self.session.points)):
+            row = self.selected_point_index if self.selected_point_index is not None else -1
         if 0 <= row < len(self.session.points):
             del self.session.points[row]
+            for i, p in enumerate(self.session.points):
+                p.point_num = i + 1
+            self.selected_point_index = None
             self._update_sequence_chips()
             self._update_next_formation_indicator()
             self._update_table_and_stats()
+            self._update_selection_controls()
 
     def _clear_all_points(self):
         if not self.session.points:
@@ -2909,9 +3519,11 @@ class DebriefMainWindow(QMainWindow):
         )
         if reply == QMessageBox.StandardButton.Yes:
             self.session.points.clear()
+            self.selected_point_index = None
             self._update_sequence_chips()
             self._update_next_formation_indicator()
             self._update_table_and_stats()
+            self._update_selection_controls()
 
     # -----------------------------------------------------------------
     # Session Persistence & Debrief Report Export
