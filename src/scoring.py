@@ -1514,10 +1514,19 @@ class DebriefMainWindow(QMainWindow):
         header_layout.addWidget(self.btn_apply_draw_to_points)
 
         btn_dive_pool = QPushButton("📋 Dive Pool...")
+        btn_dive_pool.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         btn_dive_pool.clicked.connect(self._open_dive_pool_helper)
         header_layout.addWidget(btn_dive_pool)
 
+        btn_draw_gen = QPushButton("🎲 Draw Generator & Training...")
+        btn_draw_gen.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        btn_draw_gen.setStyleSheet("background: #065f46; color: #34d399; font-weight: bold;")
+        btn_draw_gen.setToolTip("Runden-Draws nach FAI AAA generieren, Trainings-Datenbank & Rhythm XP Bilder")
+        btn_draw_gen.clicked.connect(self._open_draw_generator_dialog)
+        header_layout.addWidget(btn_draw_gen)
+
         btn_3d_explorer = QPushButton("🎯 3D Formationen...")
+        btn_3d_explorer.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         btn_3d_explorer.setStyleSheet("background: #1e3a8a; color: #38bdf8; font-weight: bold;")
         btn_3d_explorer.setToolTip("Öffnet den interaktiven 3D Formation Explorer mit Head Switches & Key-Details")
         btn_3d_explorer.clicked.connect(self._open_3d_explorer_for_current)
@@ -2845,6 +2854,36 @@ class DebriefMainWindow(QMainWindow):
         dlg.formation_selected.connect(self._append_formation_to_draw)
         dlg.exec()
 
+    def _open_draw_generator_dialog(self, initial_tab: int = 0):
+        """Öffnet den interaktiven Draw Generator, die Trainings-Datenbank und die Rhythm XP Karten."""
+        try:
+            from draw_dialog import DrawGeneratorDialog
+            dlg = DrawGeneratorDialog(self)
+            if initial_tab > 0 and initial_tab < dlg.tabs.count():
+                dlg.tabs.setCurrentIndex(initial_tab)
+            dlg.exec()
+        except Exception as e:
+            QMessageBox.critical(self, "Fehler", f"Konnte Draw Generator nicht öffnen:\n{e}")
+
+    def _show_single_card_dialog(self, code: str):
+        """Zeigt ein Pop-up-Fenster mit der originalen Rhythm XP Bildkarte für eine Formation."""
+        try:
+            import card_manager
+            pix = card_manager.get_card_pixmap(code, max_width=380, max_height=420)
+            if not pix:
+                QMessageBox.information(self, "Info", f"Keine Rhythm XP Bildkarte für '{code}' gefunden.")
+                return
+            dlg = QDialog(self)
+            dlg.setWindowTitle(f"🖼️ Rhythm XP Karte: {code}")
+            l = QVBoxLayout(dlg)
+            lbl = QLabel()
+            lbl.setPixmap(pix)
+            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            l.addWidget(lbl)
+            dlg.exec()
+        except Exception as e:
+            QMessageBox.critical(self, "Fehler", f"Konnte Bild nicht laden:\n{e}")
+
     def _append_formation_to_draw(self, code: str):
         cur = self.session.draw_string.strip()
         if cur:
@@ -2912,8 +2951,10 @@ class DebriefMainWindow(QMainWindow):
             chip.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
             part_tip = f" (Block {base} Teil {part})" if info['is_block'] else ""
-            chip.setToolTip(f"{code}{part_tip}: {name}\nKlicke, um diese Formation in 3D zu visualisieren")
+            chip.setToolTip(f"{code}{part_tip}: {name}\n• Linksklick: 3D Visualisierung\n• Rechtsklick: Rhythm XP Bildkarte anzeigen")
             chip.clicked.connect(lambda checked=False, b=base, p=part: self._open_3d_explorer_for_formation(b, p))
+            chip.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+            chip.customContextMenuRequested.connect(lambda pos, c=code: self._show_single_card_dialog(c))
 
             if i == next_idx:
                 chip.setStyleSheet(
@@ -2930,6 +2971,17 @@ class DebriefMainWindow(QMainWindow):
                 arrow = QLabel("➔")
                 arrow.setStyleSheet("color: #71717a; font-weight: bold;")
                 self.chips_layout.addWidget(arrow)
+
+        self.chips_layout.addSpacing(12)
+        btn_view_cards = QPushButton("🖼️ Rhythm XP Karten")
+        btn_view_cards.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        btn_view_cards.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_view_cards.setStyleSheet(
+            "background-color: #1e293b; color: #38bdf8; border: 1px solid #0284c7; border-radius: 4px; padding: 2px 8px; font-size: 11px;"
+        )
+        btn_view_cards.setToolTip("Zeigt die offiziellen Rhythm XP Bildkarten für das aktuelle Draw an")
+        btn_view_cards.clicked.connect(lambda: self._open_draw_generator_dialog(0))
+        self.chips_layout.addWidget(btn_view_cards)
 
         self.chips_layout.addStretch()
 
@@ -3166,6 +3218,9 @@ class DebriefMainWindow(QMainWindow):
 
         act_seek = menu.addAction(f"▶ Zum Punkt im Video springen ({format_seconds(pt.time_complete)})")
         act_seek.triggered.connect(lambda: self._seek_to_time(pt.time_complete))
+
+        act_card = menu.addAction(f"🖼️ Rhythm XP Bildkarte für {pt.formation} anzeigen")
+        act_card.triggered.connect(lambda: self._show_single_card_dialog(pt.formation))
 
         menu.addSeparator()
         act_del = menu.addAction("🗑️ Diesen Punkt löschen [Entf]")
@@ -3549,6 +3604,11 @@ class DebriefMainWindow(QMainWindow):
             try:
                 with open(path, "w", encoding="utf-8") as f:
                     json.dump(self.session.to_dict(), f, indent=2, ensure_ascii=False)
+                try:
+                    from training_db import TrainingDatabase
+                    TrainingDatabase().record_session(self.session.to_dict(), file_path=path)
+                except Exception:
+                    pass
                 QMessageBox.information(self, "Gespeichert", f"Session gespeichert:\n{os.path.basename(path)}")
             except Exception as e:
                 QMessageBox.critical(self, "Fehler", f"Konnte Datei nicht speichern:\n{e}")
@@ -3561,6 +3621,11 @@ class DebriefMainWindow(QMainWindow):
                 with open(path, "r", encoding="utf-8") as f:
                     data = json.load(f)
                 self.session = JumpSession.from_dict(data)
+                try:
+                    from training_db import TrainingDatabase
+                    TrainingDatabase().record_session(self.session.to_dict(), file_path=path)
+                except Exception:
+                    pass
 
                 self.edit_jump_name.setText(self.session.jump_name)
                 self.edit_draw.setText(self.session.draw_string)

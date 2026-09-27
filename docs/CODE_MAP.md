@@ -92,3 +92,38 @@ FAI 4-Way Dive Pool database and 3D coordinate definitions.
 - `FormationDefinition`: Code, name, is_block, flyer states for start/close phases, grip definitions.
 - `_build_dive_pool()`: Constructs all 16 Randoms (A–Q) and 22 Blocks (1–22).
 - `get_formation(code: str) -> Optional[FormationDefinition]`: Retrieval helper.
+
+---
+
+## 📦 `src/draw_generator.py` (~180 lines)
+FAI AAA draw generator and multi-round sequence builder.
+- `GeneratedRound`: Round data model (round_number, formations, total_points, draw_string, names).
+- `DrawGenerator`:
+  - `generate_draw(num_rounds, mode, seed) -> List[GeneratedRound]`
+  - Modes: `'fai_aaa'` (5–6 pts/rd, pool depletion), `'least_trained'` (training DB weighted), `'randoms_only'`, `'blocks_only'`.
+
+---
+
+## 📦 `src/training_db.py` (~230 lines)
+Persistent training metrics and debrief history manager.
+- `FormationTrainingStats`: Per-formation metrics (jump count, scores, busts, accuracy %, hold times, transitions, last trained).
+- `TrainingDatabase`:
+  - `scan_debriefs_folder(folder)`: Re-indexes all `debriefs/*.json`.
+  - `record_session(session_dict, file_path)`: Logs a completed jump session.
+  - `get_least_trained_formations(pool_type) -> List[Tuple[code, count]]`: Sorted ascending.
+
+---
+
+## 📦 `src/card_manager.py` (~75 lines)
+Rhythm XP diagram cards loader and image provider.
+- `get_card_path(code: str) -> Optional[str]`: Resolves image path for Randoms (`assets/cards/randoms/{CODE}.png`) and Blocks (`assets/cards/blocks/{CODE}.png`).
+- `get_card_pixmap(code: str, max_w, max_h) -> Optional[QPixmap]`: Scaled smooth pixmap.
+
+---
+
+## 📦 `src/draw_dialog.py` (~320 lines)
+Multi-tab GUI dialog for Draw Generation, Training Analytics, and Rhythm XP Card Visualizer.
+- `DrawGeneratorDialog(QDialog)`:
+  - Tab 1: Draw generator configuration, rounds list, horizontal Rhythm XP cards strip, and `Apply to Session` button.
+  - Tab 2: Training metrics summary, sortable 39-formation statistics table, and side preview card.
+  - Tab 3: Full Rhythm XP dive pool visual card browser with search and category filtering.

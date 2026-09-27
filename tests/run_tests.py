@@ -164,6 +164,70 @@ def test_gui_and_interactions():
     assert w.session.points[1].time_key == 22.5
 
 
+def test_card_manager():
+    """Test Rhythm XP formation card path resolution and pixmap loading."""
+    import card_manager
+
+    # Randoms
+    assert card_manager.get_card_path("A") is not None
+    assert card_manager.get_card_path("Q") is not None
+    pix_a = card_manager.get_card_pixmap("A", max_width=100, max_height=100)
+    assert pix_a is not None and not pix_a.isNull()
+
+    # Blocks (full and split parts)
+    assert card_manager.get_card_path("12") is not None
+    assert card_manager.get_card_path("12-1") is not None
+    assert card_manager.get_card_path("12-2") is not None
+    pix_12 = card_manager.get_card_pixmap("12", max_width=100, max_height=100)
+    assert pix_12 is not None and not pix_12.isNull()
+
+
+def test_training_db_and_draw_generator():
+    """Test TrainingDatabase indexing and FAI AAA DrawGenerator rules."""
+    from training_db import TrainingDatabase
+    from draw_generator import DrawGenerator
+    from draw_dialog import DrawGeneratorDialog
+    from scoring import DebriefMainWindow
+
+    # Training DB
+    db = TrainingDatabase()
+    assert len(db.formation_stats) == 39
+    db.scan_debriefs_folder()
+    least = db.get_least_trained_formations()
+    assert len(least) == 39
+    # Least trained should be sorted ascending by jump_count
+    assert least[0][1] <= least[-1][1]
+
+    # Draw Generator: FAI AAA Rules (10 rounds)
+    gen = DrawGenerator(training_db=db)
+    rounds = gen.generate_draw(num_rounds=10, mode="fai_aaa", seed=123)
+    assert len(rounds) == 10
+    for r in rounds:
+        assert 5 <= r.total_points <= 6
+        # No duplicate formation in a round
+        assert len(r.formations) == len(set(r.formations))
+        # Points tally verification
+        expected_pts = sum(2 if f.isdigit() else 1 for f in r.formations)
+        assert expected_pts == r.total_points
+
+    # Least trained mode
+    lt_rounds = gen.generate_draw(num_rounds=5, mode="least_trained", seed=123)
+    assert len(lt_rounds) == 5
+    for r in lt_rounds:
+        assert 5 <= r.total_points <= 6
+
+    # DrawGeneratorDialog offscreen test
+    w = DebriefMainWindow()
+    dlg = DrawGeneratorDialog(main_window=w)
+    assert len(dlg.current_rounds) >= 1
+    assert dlg.table_stats.rowCount() == 39
+    # Test applying round to main window
+    dlg.list_rounds.setCurrentRow(0)
+    first_round = dlg.current_rounds[0]
+    dlg._apply_current_round_to_debrief()
+    assert w.edit_draw.text() == first_round.draw_string
+
+
 def main():
     start = time.time()
     print("=" * 60)
@@ -175,6 +239,8 @@ def main():
         ("FAI Dive Pool & Sequence Logic", test_dive_pool_logic),
         ("Timing Math & Working Time Models", test_timing_and_models),
         ("GUI Offscreen, Selection & Table Edit", test_gui_and_interactions),
+        ("Rhythm XP Card Manager & Pixmaps", test_card_manager),
+        ("Training DB & FAI AAA Draw Generator", test_training_db_and_draw_generator),
     ]
 
     passed = 0

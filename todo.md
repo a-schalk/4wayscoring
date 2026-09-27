@@ -30,11 +30,7 @@ Needed Fixes:
 Needed Extended Features:
 - [x] 1. After selecting a given point it should be possible to set the finished and key time. *(Done: Point selection mode via timeline click, table row click, or double click; action bar and F/K shortcuts update selected point).*
 - [x] 2. An already saved debrief should be editable. For example change the draw. *(Done: `🔄 Draw anwenden` button updates formation codes of all existing points while preserving timestamps, keys, status and notes).*
-3. Create a Draw generator where a selected number of rounds draws are generated following the FAI AAA rules for a draw.
-4. Create a Training Database where all briefings are stored and all trained formations and randoms.
-5. Consider the Training Database for the Draw generator so that blocks and randoms are used they are least trained.
-6. Show the pictures of the draw provided from the Rythm XP pdfs
-7. 
-
- 
- 
+- [x] 3. Create a Draw generator where a selected number of rounds draws are generated following the FAI AAA rules for a draw. *(Done: `src/draw_generator.py` generates 1–20 rounds strictly following FAI AAA rules: 5–6 points/round, blocks = 2 pts, randoms = 1 pt, pool depletion).*
+- [x] 4. Create a Training Database where all briefings are stored and all trained formations and randoms. *(Done: `src/training_db.py` parses debriefs, tracks jump counts, accuracy, hold times, and transitions per formation).*
+- [x] 5. Consider the Training Database for the Draw generator so that blocks and randoms are used they are least trained. *(Done: `mode="least_trained"` weights draw generation by lowest jump count from TrainingDatabase).*
+- [x] 6. Show the pictures of the draw provided from the Rhythm XP pdfs. *(Done: Extracted all Rhythm XP cards to `assets/cards/`, rendered in Draw Generator dialog, sequence bar chips, and table context menu).*
