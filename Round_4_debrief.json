@@ -1,0 +1,20 @@
+{
+  "version": "1.0",
+  "jump_name": "Round 4",
+  "video_path": "/home/andreass/Bilder/fairenough/20250814/GH012692_cut.mp4",
+  "draw_string": "11-q-n-15",
+  "working_time_duration": 35.0,
+  "exit_time": 2.18,
+  "in_point": null,
+  "out_point": null,
+  "points": [
+    {
+      "point_num": 1,
+      "formation": "13",
+      "status": "APPROVED",
+      "time_complete": 7.58,
+      "time_key": null,
+      "notes": ""
+    }
+  ]
+}

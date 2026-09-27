@@ -1,0 +1,140 @@
+{
+  "version": "1.0",
+  "jump_name": "20260920_01",
+  "video_path": "",
+  "draw_string": "B-E-J-F-H",
+  "working_time_duration": 35.0,
+  "exit_time": 1.12,
+  "in_point": null,
+  "out_point": null,
+  "points": [
+    {
+      "point_num": 1,
+      "formation": "B",
+      "status": "APPROVED",
+      "time_complete": 7.92,
+      "time_key": null,
+      "notes": ""
+    },
+    {
+      "point_num": 2,
+      "formation": "E",
+      "status": "APPROVED",
+      "time_complete": 10.52,
+      "time_key": null,
+      "notes": ""
+    },
+    {
+      "point_num": 3,
+      "formation": "J",
+      "status": "APPROVED",
+      "time_complete": 12.48,
+      "time_key": null,
+      "notes": ""
+    },
+    {
+      "point_num": 4,
+      "formation": "F",
+      "status": "APPROVED",
+      "time_complete": 15.1,
+      "time_key": null,
+      "notes": ""
+    },
+    {
+      "point_num": 5,
+      "formation": "H",
+      "status": "APPROVED",
+      "time_complete": 16.580000000000002,
+      "time_key": null,
+      "notes": ""
+    },
+    {
+      "point_num": 6,
+      "formation": "B",
+      "status": "APPROVED",
+      "time_complete": 21.12,
+      "time_key": null,
+      "notes": ""
+    },
+    {
+      "point_num": 7,
+      "formation": "E",
+      "status": "APPROVED",
+      "time_complete": 24.78,
+      "time_key": null,
+      "notes": ""
+    },
+    {
+      "point_num": 8,
+      "formation": "J",
+      "status": "APPROVED",
+      "time_complete": 26.68,
+      "time_key": null,
+      "notes": ""
+    },
+    {
+      "point_num": 9,
+      "formation": "F",
+      "status": "APPROVED",
+      "time_complete": 28.78,
+      "time_key": null,
+      "notes": ""
+    },
+    {
+      "point_num": 10,
+      "formation": "H",
+      "status": "APPROVED",
+      "time_complete": 30.82,
+      "time_key": null,
+      "notes": ""
+    },
+    {
+      "point_num": 11,
+      "formation": "B",
+      "status": "APPROVED",
+      "time_complete": 34.56,
+      "time_key": null,
+      "notes": ""
+    },
+    {
+      "point_num": 12,
+      "formation": "E",
+      "status": "APPROVED",
+      "time_complete": 37.480000000000004,
+      "time_key": null,
+      "notes": ""
+    },
+    {
+      "point_num": 13,
+      "formation": "J",
+      "status": "APPROVED",
+      "time_complete": 40.300000000000004,
+      "time_key": null,
+      "notes": ""
+    },
+    {
+      "point_num": 14,
+      "formation": "F",
+      "status": "APPROVED",
+      "time_complete": 42.4,
+      "time_key": null,
+      "notes": ""
+    },
+    {
+      "point_num": 15,
+      "formation": "H",
+      "status": "APPROVED",
+      "time_complete": 44.58,
+      "time_key": null,
+      "notes": ""
+    },
+    {
+      "point_num": 16,
+      "formation": "B",
+      "status": "APPROVED",
+      "time_complete": 47.68,
+      "time_key": null,
+      "notes": ""
+    }
+  ]
+}
