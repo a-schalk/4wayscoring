@@ -86,34 +86,140 @@ def lerp(a: float, b: float, t: float) -> float:
     return a + (b - a) * t
 
 
-def lerp_angle_deg(a: float, b: float, t: float) -> float:
-    """Interpolates angles along the shortest circular arc."""
-    diff = (b - a + 180.0) % 360.0 - 180.0
-    return (a + diff * t) % 360.0
+def interpolate_piece_kinematics(
+    formation: FormationDefinition,
+    phase: float,  # 0.0 (Initial) to 2.0 (Close)
+    use_vertical: bool = False
+) -> Dict[str, Flyer3DState]:
+    """
+    Computes exact 4-Way piece kinematics with rigid orbital rotations.
+    Prevents piece partners from drifting apart or cutting through each other,
+    and accurately executes 360°, 540°, 270°, and 180° rotations.
+    """
+    if not formation or not formation.is_block or not formation.state_close:
+        return formation.state_initial if formation else {}
+
+    u = max(0.0, min(1.0, phase / 2.0))
+    s_initial = formation.state_initial
+    s_close = (formation.state_close_vertical if (use_vertical and formation.state_close_vertical)
+               else formation.state_close)
+
+    # Fetch kinematics pieces from formation_db
+    from formation_db import get_block_piece_kinematics
+    pieces = get_block_piece_kinematics(formation, use_vertical)
+
+    result: Dict[str, Flyer3DState] = {}
+    assigned_slots = set()
+
+    for p in pieces:
+        valid_s0 = [sl for sl in p.slots if sl in s_initial]
+        valid_s1 = [sl for sl in p.slots if sl in s_close]
+        if not valid_s0 or not valid_s1:
+            continue
+
+        if p.pivot_mode == "center" or p.pivot_mode not in s_initial or p.pivot_mode not in s_close:
+            p0_x = sum(s_initial[sl].x for sl in valid_s0) / len(valid_s0)
+            p0_y = sum(s_initial[sl].y for sl in valid_s0) / len(valid_s0)
+            p1_x = sum(s_close[sl].x for sl in valid_s1) / len(valid_s1)
+            p1_y = sum(s_close[sl].y for sl in valid_s1) / len(valid_s1)
+        else:
+            p0_x, p0_y = s_initial[p.pivot_mode].x, s_initial[p.pivot_mode].y
+            p1_x, p1_y = s_close[p.pivot_mode].x, s_close[p.pivot_mode].y
+
+        # Current pivot at progress u
+        curr_pivot_x = (1.0 - u) * p0_x + u * p1_x
+        curr_pivot_y = (1.0 - u) * p0_y + u * p1_y
+
+        # Angular sweep
+        curr_ang_deg = p.rotation_deg * u
+        curr_rad = math.radians(curr_ang_deg)
+        cos_curr = math.cos(curr_rad)
+        sin_curr = math.sin(curr_rad)
+
+        total_rad = math.radians(p.rotation_deg)
+        cos_total = math.cos(total_rad)
+        sin_total = math.sin(total_rad)
+
+        # Vertical arch for over/under
+        vert_arch = p.vertical_arch * math.sin(math.pi * u)
+
+        for sl in p.slots:
+            if sl not in s_initial or sl not in s_close:
+                continue
+            f0 = s_initial[sl]
+            f1 = s_close[sl]
+
+            # Relative offset from start pivot
+            r0_x = f0.x - p0_x
+            r0_y = f0.y - p0_y
+            r1_x = f1.x - p1_x
+            r1_y = f1.y - p1_y
+
+            R0 = math.hypot(r0_x, r0_y)
+            R1 = math.hypot(r1_x, r1_y)
+            phi0 = math.atan2(r0_y, r0_x)
+            phi1 = math.atan2(r1_y, r1_x)
+
+            # Difference in piece-local frame
+            dphi = (phi1 - total_rad - phi0 + math.pi) % (2.0 * math.pi) - math.pi
+
+            # Interpolate radius and local angle, then rotate by curr_rad
+            R_u = (1.0 - u) * R0 + u * R1
+            phi_u = phi0 + dphi * u + curr_rad
+
+            rot_x = R_u * math.cos(phi_u)
+            rot_y = R_u * math.sin(phi_u)
+
+            fx = curr_pivot_x + rot_x
+            fy = curr_pivot_y + rot_y
+            fz = (1.0 - u) * f0.z + u * f1.z + vert_arch
+
+            # Heading rotates smoothly in piece rotation direction
+            f_heading = (f0.heading_deg + curr_ang_deg) % 360.0
+            f_head_turn = (1.0 - u) * f0.head_turn_deg + u * f1.head_turn_deg
+
+            # Head switch
+            hs_active = (f0.head_switch_active if u < 0.5 else f1.head_switch_active)
+            hs_desc = f1.head_switch_desc if u >= 0.5 else f0.head_switch_desc
+            gaze_tgt = f1.gaze_target if u >= 0.5 else f0.gaze_target
+
+            result[sl] = Flyer3DState(
+                x=fx, y=fy, z=fz,
+                heading_deg=f_heading,
+                head_turn_deg=f_head_turn,
+                head_switch_active=hs_active,
+                head_switch_desc=hs_desc,
+                gaze_target=gaze_tgt,
+                left_grip=f1.left_grip if u >= 0.8 else (f0.left_grip if u <= 0.2 else None),
+                right_grip=f1.right_grip if u >= 0.8 else (f0.right_grip if u <= 0.2 else None),
+                grippers_presented=f1.grippers_presented if u >= 0.5 else f0.grippers_presented
+            )
+            assigned_slots.add(sl)
+
+    # Any remaining unassigned slots
+    for sl in ["Point", "OC", "IC", "Tail"]:
+        if sl not in assigned_slots and sl in s_initial and sl in s_close:
+            f0 = s_initial[sl]
+            f1 = s_close[sl]
+            result[sl] = Flyer3DState(
+                x=(1.0 - u) * f0.x + u * f1.x,
+                y=(1.0 - u) * f0.y + u * f1.y,
+                z=(1.0 - u) * f0.z + u * f1.z,
+                heading_deg=(1.0 - u) * f0.heading_deg + u * f1.heading_deg,
+                head_turn_deg=(1.0 - u) * f0.head_turn_deg + u * f1.head_turn_deg
+            )
+
+    return result
 
 
-def interpolate_flyer_states(
-    s1: Flyer3DState, s2: Flyer3DState, t: float
-) -> Flyer3DState:
-    """Smoothly blends two flyer 3D states."""
+def interpolate_flyer_states(s1: Flyer3DState, s2: Flyer3DState, t: float) -> Flyer3DState:
+    """Legacy helper maintained for backward compatibility."""
     x = lerp(s1.x, s2.x, t)
     y = lerp(s1.y, s2.y, t)
     z = lerp(s1.z, s2.z, t)
-    heading = lerp_angle_deg(s1.heading_deg, s2.heading_deg, t)
-    head_turn = lerp(s1.head_turn_deg, s2.head_turn_deg, t)
-    
-    # Head switch is active if either state has it active or midway
-    hs_active = (s1.head_switch_active if t < 0.5 else s2.head_switch_active)
-    hs_desc = s2.head_switch_desc if t >= 0.5 else s1.head_switch_desc
-    gaze_tgt = s2.gaze_target if t >= 0.5 else s1.gaze_target
-    
-    return Flyer3DState(
-        x=x, y=y, z=z, heading_deg=heading, head_turn_deg=head_turn,
-        head_switch_active=hs_active, head_switch_desc=hs_desc, gaze_target=gaze_tgt,
-        left_grip=s2.left_grip if t >= 0.8 else (s1.left_grip if t <= 0.2 else None),
-        right_grip=s2.right_grip if t >= 0.8 else (s1.right_grip if t <= 0.2 else None),
-        grippers_presented=s2.grippers_presented if t >= 0.5 else s1.grippers_presented
-    )
+    diff = (s2.heading_deg - s1.heading_deg + 180.0) % 360.0 - 180.0
+    heading = (s1.heading_deg + diff * t) % 360.0
+    return Flyer3DState(x=x, y=y, z=z, heading_deg=heading)
 
 
 # =============================================================================
@@ -295,6 +401,18 @@ class Formation3DWidget(QWidget):
         self.zoom = max(0.3, min(3.0, self.zoom * zoom_factor))
         self.update()
 
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_V:
+            # Toggle between Top-Down (Coach View) and 3D Perspective
+            if abs(self.pitch - 1.55) < 0.15:
+                self.reset_camera(top_down=False)
+            else:
+                self.reset_camera(top_down=True)
+        elif event.key() == Qt.Key.Key_Space:
+            self.play_pause_animation()
+        else:
+            super().keyPressEvent(event)
+
     # -------------------------------------------------------------------------
     # Spatial Calculation & Flyer State Interpolation
     # -------------------------------------------------------------------------
@@ -304,34 +422,12 @@ class Formation3DWidget(QWidget):
             return {}
 
         form = self.current_formation
-        if not form.is_block or not form.state_inter or not form.state_close:
+        if not form.is_block:
             return form.state_initial
 
-        # Choose between Vertical and On-Level states
-        s_inter = (form.state_inter_vertical if (self.use_vertical_technique and form.state_inter_vertical)
-                   else form.state_inter)
-        s_close = (form.state_close_vertical if (self.use_vertical_technique and form.state_close_vertical)
-                   else form.state_close)
-
-        states: Dict[str, Flyer3DState] = {}
-        for slot in ["Point", "OC", "IC", "Tail"]:
-            s0 = form.state_initial.get(slot)
-            s1 = s_inter.get(slot)
-            s2 = s_close.get(slot)
-
-            if not s0 or not s1 or not s2:
-                continue
-
-            if self.current_phase <= 1.0:
-                # Interpolate between Initial (0.0) and Inter (1.0)
-                t = self.current_phase
-                states[slot] = interpolate_flyer_states(s0, s1, t)
-            else:
-                # Interpolate between Inter (1.0) and Close (2.0)
-                t = self.current_phase - 1.0
-                states[slot] = interpolate_flyer_states(s1, s2, t)
-
-        return states
+        return interpolate_piece_kinematics(
+            form, self.current_phase, self.use_vertical_technique
+        )
 
     def _find_flyer_at_screen_pos(self, sx: float, sy: float) -> Optional[str]:
         """Returns slot name if click/hover is within bounding radius of flyer."""
@@ -535,10 +631,10 @@ class Formation3DWidget(QWidget):
         self, painter: QPainter, slot: str, state: Flyer3DState,
         px: float, py: float, cx: float, cy: float
     ):
-        """Renders an anatomically accurate 4-Way Mantis Skydiver in 3D perspective."""
+        """Renders an anatomically accurate 4-Way Mantis Skydiver in true 3D perspective with volumetric depth."""
         painter.save()
 
-        # Slot Color Scheme
+        # Slot Color Scheme (SDC Rhythm XP standard)
         color_map = {
             "Point": QColor(COLOR_POINT),
             "OC": QColor(COLOR_OC),
@@ -553,15 +649,22 @@ class Formation3DWidget(QWidget):
 
         # Body orientation vectors
         rad_body = math.radians(state.heading_deg)
-        fx, fy = math.sin(rad_body), math.cos(rad_body)  # Forward direction
-        rx, ry = math.cos(rad_body), -math.sin(rad_body) # Right direction
+        fx, fy = math.sin(rad_body), math.cos(rad_body)  # Forward direction (+Y = North)
+        rx, ry = math.cos(rad_body), -math.sin(rad_body) # Right direction (+X = East)
 
-        # Dimensions (inches)
+        # Body Dimensions (inches)
         torso_len = 16.0
         torso_wid = 9.0
 
+        # Check if primary keyer
+        is_keyer = False
+        if self.current_formation:
+            k = self.current_formation.primary_key_slot
+            if k.startswith(slot) or (slot == "IC" and "Inside Center" in k) or (slot == "OC" and "Outside Center" in k) or (slot == "Point" and "Point" in k) or (slot == "Tail" and "Tail" in k):
+                is_keyer = True
+
         # ---------------------------------------------------------------------
-        # A. Mantis Legs (Thighs spread outward + lower legs bent up)
+        # A. Mantis Legs (Thighs with Leg Grippers + Shins + High-Drag Booties)
         # ---------------------------------------------------------------------
         for side, sign in [("Left", -1.0), ("Right", 1.0)]:
             hip_x = state.x + rx * (torso_wid * 0.8 * sign) - fx * (torso_len * 0.8)
@@ -569,36 +672,53 @@ class Formation3DWidget(QWidget):
             hip_z = state.z
 
             # Knee spread outward
-            knee_x = hip_x + rx * (14.0 * sign) - fx * 12.0
-            knee_y = hip_y + ry * (14.0 * sign) - fy * 12.0
-            knee_z = state.z + 1.5
+            knee_x = hip_x + rx * (14.0 * sign) - fx * 11.0
+            knee_y = hip_y + ry * (14.0 * sign) - fy * 11.0
+            knee_z = state.z + 1.0
 
-            # Ankle/Bootie bent up into airflow
-            ankle_x = knee_x + rx * (4.0 * sign) - fx * 10.0
-            ankle_y = knee_y + ry * (4.0 * sign) - fy * 10.0
-            ankle_z = state.z + 5.0
+            # Ankle / Bootie bent up into airflow
+            ankle_x = knee_x + rx * (4.5 * sign) - fx * 11.0
+            ankle_y = knee_y + ry * (4.5 * sign) - fy * 11.0
+            ankle_z = state.z + 5.5
 
-            # Project leg points
+            # Bootie fin tip (flared out for drag)
+            fin_x = ankle_x + rx * (6.0 * sign) - fx * 3.0
+            fin_y = ankle_y + ry * (6.0 * sign) - fy * 3.0
+            fin_z = state.z + 7.0
+
+            # Project points
             sh_x, sh_y, _ = project_3d_point(hip_x, hip_y, hip_z, self.yaw, self.pitch, self.zoom, self.pan_x, self.pan_y, cx, cy)
             sk_x, sk_y, _ = project_3d_point(knee_x, knee_y, knee_z, self.yaw, self.pitch, self.zoom, self.pan_x, self.pan_y, cx, cy)
             sa_x, sa_y, _ = project_3d_point(ankle_x, ankle_y, ankle_z, self.yaw, self.pitch, self.zoom, self.pan_x, self.pan_y, cx, cy)
+            sf_x, sf_y, _ = project_3d_point(fin_x, fin_y, fin_z, self.yaw, self.pitch, self.zoom, self.pan_x, self.pan_y, cx, cy)
 
-            # Draw thigh
-            pen_thigh = QPen(base_color.darker(110), 6.5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
+            # 1. Thigh segment (thick solid contour)
+            pen_thigh = QPen(base_color.darker(110), 7.5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
             painter.setPen(pen_thigh)
             painter.drawLine(QPointF(sh_x, sh_y), QPointF(sk_x, sk_y))
 
-            # Draw shin & Bootie (high drag bootie in dark gray/accent)
-            pen_shin = QPen(base_color.lighter(115), 5.5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
+            # 2. Outside Leg Gripper (High-visibility white handle bar on outside thigh)
+            gripper_pen = QPen(QColor("#f8fafc"), 2.8, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
+            painter.setPen(gripper_pen)
+            g_sh_x = sh_x + (sk_x - sh_x) * 0.2 + (sk_y - sh_y) * (-0.12 * sign)
+            g_sh_y = sh_y + (sk_y - sh_y) * 0.2 - (sk_x - sh_x) * (-0.12 * sign)
+            g_sk_x = sh_x + (sk_x - sh_x) * 0.8 + (sk_y - sh_y) * (-0.12 * sign)
+            g_sk_y = sh_y + (sk_y - sh_y) * 0.8 - (sk_x - sh_x) * (-0.12 * sign)
+            painter.drawLine(QPointF(g_sh_x, g_sh_y), QPointF(g_sk_x, g_sk_y))
+
+            # 3. Shin segment (bent up towards airflow)
+            pen_shin = QPen(base_color.lighter(115), 6.0, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
             painter.setPen(pen_shin)
             painter.drawLine(QPointF(sk_x, sk_y), QPointF(sa_x, sa_y))
 
-            # Bootie scoop fin
-            painter.setPen(QPen(QColor("#1e293b"), 4.0, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
-            painter.drawPoint(QPointF(sa_x, sa_y))
+            # 4. Flared Bootie (dark charcoal wing providing yaw stability)
+            bootie_poly = QPolygonF([QPointF(sk_x, sk_y), QPointF(sa_x, sa_y), QPointF(sf_x, sf_y)])
+            painter.setPen(QPen(QColor("#0f172a"), 1.0))
+            painter.setBrush(QColor("#1e293b"))
+            painter.drawPolygon(bootie_poly)
 
         # ---------------------------------------------------------------------
-        # B. Mantis Arms (Elbows forward/down + hands in front of face)
+        # B. Mantis Arms (Elbows forward/down + Forearms in front + Wrist Grippers)
         # ---------------------------------------------------------------------
         for side, sign in [("Left", -1.0), ("Right", 1.0)]:
             sh_x = state.x + rx * (torso_wid * sign) + fx * (torso_len * 0.4)
@@ -611,8 +731,8 @@ class Formation3DWidget(QWidget):
             el_z = state.z - 2.0
 
             # Hand cupped in front
-            hd_x = el_x - rx * (4.0 * sign) + fx * 9.0
-            hd_y = el_y - ry * (4.0 * sign) + fy * 9.0
+            hd_x = el_x - rx * (4.5 * sign) + fx * 9.0
+            hd_y = el_y - ry * (4.5 * sign) + fy * 9.0
             hd_z = state.z
 
             ssh_x, ssh_y, _ = project_3d_point(sh_x, sh_y, sh_z, self.yaw, self.pitch, self.zoom, self.pan_x, self.pan_y, cx, cy)
@@ -620,57 +740,90 @@ class Formation3DWidget(QWidget):
             shd_x, shd_y, _ = project_3d_point(hd_x, hd_y, hd_z, self.yaw, self.pitch, self.zoom, self.pan_x, self.pan_y, cx, cy)
 
             # Draw upper arm
-            painter.setPen(QPen(base_color.darker(110), 5.5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+            painter.setPen(QPen(base_color.darker(110), 6.5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
             painter.drawLine(QPointF(ssh_x, ssh_y), QPointF(sel_x, sel_y))
 
             # Draw forearm
-            painter.setPen(QPen(base_color.lighter(115), 4.5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+            painter.setPen(QPen(base_color.lighter(115), 5.5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
             painter.drawLine(QPointF(sel_x, sel_y), QPointF(shd_x, shd_y))
 
-            # Hand gripper marker
-            painter.setPen(QPen(QColor("#f8fafc"), 4.0))
-            painter.drawPoint(QPointF(shd_x, shd_y))
+            # Wrist gripper cuff (White handle cuff)
+            w_x = sel_x + (shd_x - sel_x) * 0.7
+            w_y = sel_y + (shd_y - sel_y) * 0.7
+            painter.setPen(QPen(QColor("#f8fafc"), 4.0, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+            painter.drawPoint(QPointF(w_x, w_y))
+
+            # Glove / Hand
+            painter.setPen(QPen(QColor("#0f172a"), 1.0))
+            painter.setBrush(QColor("#ffffff"))
+            painter.drawEllipse(QPointF(shd_x, shd_y), 3.0, 3.0)
 
         # ---------------------------------------------------------------------
-        # C. Torso & Jumpsuit
+        # C. Volumetric Torso & Parachute Rig
         # ---------------------------------------------------------------------
-        t_pts = [
-            (state.x - rx * torso_wid + fx * torso_len, state.y - ry * torso_wid + fy * torso_len, state.z),
-            (state.x + rx * torso_wid + fx * torso_len, state.y + ry * torso_wid + fy * torso_len, state.z),
-            (state.x + rx * (torso_wid * 0.8) - fx * torso_len, state.y + ry * (torso_wid * 0.8) - fy * torso_len, state.z),
-            (state.x - rx * (torso_wid * 0.8) - fx * torso_len, state.y - ry * (torso_wid * 0.8) - fy * torso_len, state.z),
+        z_top = state.z + 2.0
+        z_bot = state.z - 2.0
+
+        t_pts_top = [
+            (state.x - rx * torso_wid + fx * torso_len, state.y - ry * torso_wid + fy * torso_len, z_top),
+            (state.x + rx * torso_wid + fx * torso_len, state.y + ry * torso_wid + fy * torso_len, z_top),
+            (state.x + rx * (torso_wid * 0.8) - fx * torso_len, state.y + ry * (torso_wid * 0.8) - fy * torso_len, z_top),
+            (state.x - rx * (torso_wid * 0.8) - fx * torso_len, state.y - ry * (torso_wid * 0.8) - fy * torso_len, z_top),
         ]
-        torso_poly = QPolygonF()
-        for tx, ty, tz in t_pts:
+        t_poly_top = QPolygonF()
+        for tx, ty, tz in t_pts_top:
             tsx, tsy, _ = project_3d_point(tx, ty, tz, self.yaw, self.pitch, self.zoom, self.pan_x, self.pan_y, cx, cy)
-            torso_poly.append(QPointF(tsx, tsy))
+            t_poly_top.append(QPointF(tsx, tsy))
 
-        # Fill Torso
-        torso_brush = QBrush(base_color)
-        pen_torso = QPen(QColor("#ffffff") if is_selected else (base_color.lighter(140) if is_hovered else base_color.darker(130)))
-        pen_torso.setWidthF(2.5 if is_selected else 1.5)
+        t_pts_bot = [
+            (state.x - rx * torso_wid + fx * torso_len, state.y - ry * torso_wid + fy * torso_len, z_bot),
+            (state.x + rx * torso_wid + fx * torso_len, state.y + ry * torso_wid + fy * torso_len, z_bot),
+            (state.x + rx * (torso_wid * 0.8) - fx * torso_len, state.y + ry * (torso_wid * 0.8) - fy * torso_len, z_bot),
+            (state.x - rx * (torso_wid * 0.8) - fx * torso_len, state.y - ry * (torso_wid * 0.8) - fy * torso_len, z_bot),
+        ]
+        t_poly_bot = QPolygonF()
+        for tx, ty, tz in t_pts_bot:
+            tsx, tsy, _ = project_3d_point(tx, ty, tz, self.yaw, self.pitch, self.zoom, self.pan_x, self.pan_y, cx, cy)
+            t_poly_bot.append(QPointF(tsx, tsy))
+
+        # Shaded bottom/side bevel
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(base_color.darker(140))
+        painter.drawPolygon(t_poly_bot)
+
+        # Top torso surface
+        torso_brush = QBrush(base_color if not is_hovered else base_color.lighter(120))
+        pen_torso = QPen(QColor("#ffffff") if is_selected else base_color.darker(130), 2.0 if is_selected else 1.2)
         painter.setPen(pen_torso)
         painter.setBrush(torso_brush)
-        painter.drawPolygon(torso_poly)
+        painter.drawPolygon(t_poly_top)
 
-        # Parachute Container (Rig on back)
+        # Parachute Rig (Charcoal 3D container on back)
         rig_pts = [
-            (state.x - rx * 6.5 + fx * 4.0, state.y - ry * 6.5 + fy * 4.0, state.z + 1.5),
-            (state.x + rx * 6.5 + fx * 4.0, state.y + ry * 6.5 + fy * 4.0, state.z + 1.5),
-            (state.x + rx * 6.0 - fx * 12.0, state.y + ry * 6.0 - fy * 12.0, state.z + 1.5),
-            (state.x - rx * 6.0 - fx * 12.0, state.y - ry * 6.0 - fy * 12.0, state.z + 1.5),
+            (state.x - rx * 6.5 + fx * 4.0, state.y - ry * 6.5 + fy * 4.0, z_top + 1.8),
+            (state.x + rx * 6.5 + fx * 4.0, state.y + ry * 6.5 + fy * 4.0, z_top + 1.8),
+            (state.x + rx * 6.0 - fx * 12.0, state.y + ry * 6.0 - fy * 12.0, z_top + 1.8),
+            (state.x - rx * 6.0 - fx * 12.0, state.y - ry * 6.0 - fy * 12.0, z_top + 1.8),
         ]
         rig_poly = QPolygonF()
         for rx_i, ry_i, rz_i in rig_pts:
             rsx, rsy, _ = project_3d_point(rx_i, ry_i, rz_i, self.yaw, self.pitch, self.zoom, self.pan_x, self.pan_y, cx, cy)
             rig_poly.append(QPointF(rsx, rsy))
 
-        painter.setPen(QPen(QColor("#0f172a"), 1.0))
-        painter.setBrush(QColor("#1e293b"))  # Dark charcoal rig
+        painter.setPen(QPen(QColor("#0f172a"), 1.2))
+        painter.setBrush(QColor("#1e293b"))
         painter.drawPolygon(rig_poly)
 
+        # Center pin flap accent on rig
+        painter.setPen(QPen(base_color.lighter(130), 1.5))
+        rig_mid_x = (rig_poly[0].x() + rig_poly[1].x()) / 2.0
+        rig_mid_y = (rig_poly[0].y() + rig_poly[1].y()) / 2.0
+        rig_bot_x = (rig_poly[2].x() + rig_poly[3].x()) / 2.0
+        rig_bot_y = (rig_poly[2].y() + rig_poly[3].y()) / 2.0
+        painter.drawLine(QPointF(rig_mid_x, rig_mid_y), QPointF(rig_bot_x, rig_bot_y))
+
         # ---------------------------------------------------------------------
-        # D. Head, Helmet & Gaze Ray (HEAD SWITCH)
+        # D. Head, Helmet, 3D Directional Visor & Gaze Vector
         # ---------------------------------------------------------------------
         head_x = state.x + fx * (torso_len + 5.5)
         head_y = state.y + fy * (torso_len + 5.5)
@@ -682,123 +835,102 @@ class Formation3DWidget(QWidget):
         rad_gaze = math.radians(total_gaze_deg)
         gfx, gfy = math.sin(rad_gaze), math.cos(rad_gaze)
 
-        # Draw Gaze Ray / Head Switch Beam
-        if self.show_gaze_rays:
-            gaze_len = 45.0
+        # 3D Gaze Ray (subtle, non-obtrusive)
+        if self.show_gaze_rays and (is_selected or state.head_switch_active):
+            gaze_len = 40.0
             gt_x = head_x + gfx * gaze_len
             gt_y = head_y + gfy * gaze_len
             gt_z = head_z
             gsx, gsy, _ = project_3d_point(gt_x, gt_y, gt_z, self.yaw, self.pitch, self.zoom, self.pan_x, self.pan_y, cx, cy)
 
             if state.head_switch_active:
-                # Pulsing yellow/cyan beam for active head switch
                 beam_alpha = int(180 + 75 * math.sin(self.pulse_phase * 2.0))
-                pen_beam = QPen(QColor(250, 204, 21, beam_alpha), 2.0, Qt.PenStyle.DashLine)
+                pen_beam = QPen(QColor(245, 158, 11, beam_alpha), 1.8, Qt.PenStyle.DashLine)
                 painter.setPen(pen_beam)
                 painter.drawLine(QPointF(hsx, hsy), QPointF(gsx, gsy))
-
-                # Sightline target crosshair
-                painter.setPen(QColor(250, 204, 21, 220))
-                painter.setBrush(Qt.BrushStyle.NoBrush)
-                painter.drawEllipse(QPointF(gsx, gsy), 5.0, 5.0)
-                painter.drawLine(QPointF(gsx - 8, gsy), QPointF(gsx + 8, gsy))
-                painter.drawLine(QPointF(gsx, gsy - 8), QPointF(gsx, gsy + 8))
-
-                # Gaze target tag
-                if state.gaze_target:
-                    painter.setFont(QFont("Segoe UI", 7, QFont.Weight.Bold))
-                    painter.setPen(QColor(254, 240, 138))
-                    painter.drawText(QRectF(gsx + 8, gsy - 8, 80, 16), Qt.AlignmentFlag.AlignLeft, f"→ {state.gaze_target}")
+                # Small sightline marker
+                painter.setBrush(QColor(245, 158, 11, 200))
+                painter.drawEllipse(QPointF(gsx, gsy), 3.0, 3.0)
             else:
-                # Normal subtle forward sightline
-                pen_beam = QPen(QColor(148, 163, 184, 90), 1.0, Qt.PenStyle.DotLine)
+                pen_beam = QPen(QColor(148, 163, 184, 80), 1.0, Qt.PenStyle.DotLine)
                 painter.setPen(pen_beam)
                 painter.drawLine(QPointF(hsx, hsy), QPointF(gsx, gsy))
 
-        # Helmet shell
-        painter.setPen(QPen(QColor("#ffffff"), 1.5))
-        painter.setBrush(QColor("#f8fafc"))
-        helmet_radius = max(5.0, 8.5 * (self.zoom * 0.9))
+        # Golden Halo for Keyer
+        helmet_radius = max(6.0, 8.5 * (self.zoom * 0.9))
+        if is_keyer:
+            halo_pulse = 1.0 + 0.12 * math.sin(self.pulse_phase)
+            halo_r = (helmet_radius + 4.5) * halo_pulse
+            painter.setPen(QPen(QColor(245, 158, 11, 210), 1.8, Qt.PenStyle.SolidLine))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawEllipse(QPointF(hsx, hsy), halo_r, halo_r)
+
+        # Helmet Dome (Shaded with 3D light)
+        grad_helmet = QRadialGradient(hsx - 2, hsy - 2, helmet_radius)
+        grad_helmet.setColorAt(0.0, QColor("#ffffff"))
+        grad_helmet.setColorAt(0.7, QColor("#e2e8f0"))
+        grad_helmet.setColorAt(1.0, QColor("#94a3b8"))
+        painter.setPen(QPen(QColor("#475569"), 1.2))
+        painter.setBrush(grad_helmet)
         painter.drawEllipse(QPointF(hsx, hsy), helmet_radius, helmet_radius)
 
-        # Helmet Visor (colored by gaze direction)
-        vx = hsx + gfx * (helmet_radius * 0.7)
-        vy = hsy - gfy * (helmet_radius * 0.7)
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor("#0284c7") if not state.head_switch_active else QColor("#eab308"))
-        painter.drawEllipse(QPointF(vx, vy), helmet_radius * 0.45, helmet_radius * 0.45)
+        # Directional 3D Visor (projected in 3D along gaze vector)
+        vx3d = head_x + gfx * 5.0
+        vy3d = head_y + gfy * 5.0
+        vz3d = head_z + 0.5
+        vsx, vsy, _ = project_3d_point(vx3d, vy3d, vz3d, self.yaw, self.pitch, self.zoom, self.pan_x, self.pan_y, cx, cy)
+        
+        # Visor appearance
+        visor_color = QColor("#eab308") if state.head_switch_active else QColor("#0284c7")
+        painter.setPen(QPen(QColor("#0f172a"), 0.8))
+        painter.setBrush(visor_color)
+        painter.drawEllipse(QPointF(vsx, vsy), helmet_radius * 0.45, helmet_radius * 0.35)
 
         # ---------------------------------------------------------------------
-        # E. Slot Badges, Key Crown & Head Switch Icon
+        # E. Decluttered Slot Pin (Sleek 16px circular badge near feet)
         # ---------------------------------------------------------------------
-        if self.show_slot_labels:
-            badge_rect = QRectF(px - 28, py - 38, 56, 18)
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QColor(15, 23, 42, 220))
-            painter.drawRoundedRect(badge_rect, 4.0, 4.0)
-            painter.setPen(QPen(base_color, 1.4))
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.drawRoundedRect(badge_rect, 4.0, 4.0)
-            painter.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
-            painter.setPen(QColor("#ffffff"))
-            painter.drawText(badge_rect, Qt.AlignmentFlag.AlignCenter, slot)
+        pin_x = state.x - fx * (torso_len + 12.0)
+        pin_y = state.y - fy * (torso_len + 12.0)
+        pin_z = state.z
+        psx, psy, _ = project_3d_point(pin_x, pin_y, pin_z, self.yaw, self.pitch, self.zoom, self.pan_x, self.pan_y, cx, cy)
 
-        # 3D KEY Crown Badge
-        if self.show_key_badge and self.current_formation:
-            is_keyer = False
-            if self.current_formation.primary_key_slot.startswith(slot):
-                is_keyer = True
-            elif slot == "IC" and "Inside Center" in self.current_formation.primary_key_slot:
-                is_keyer = True
-            elif slot == "OC" and "Outside Center" in self.current_formation.primary_key_slot:
-                is_keyer = True
-            elif slot == "Point" and "Point" in self.current_formation.primary_key_slot:
-                is_keyer = True
-            elif slot == "Tail" and "Tail" in self.current_formation.primary_key_slot:
-                is_keyer = True
+        # Circular slot badge
+        pin_r = 9.5
+        painter.setPen(QPen(QColor("#ffffff") if is_selected else QColor("#0f172a"), 1.5))
+        painter.setBrush(base_color)
+        painter.drawEllipse(QPointF(psx, psy), pin_r, pin_r)
 
-            if is_keyer:
-                kx, ky, _ = project_3d_point(state.x, state.y, state.z + 14.0, self.yaw, self.pitch, self.zoom, self.pan_x, self.pan_y, cx, cy)
-                pulse_scale = 1.0 + 0.15 * math.sin(self.pulse_phase)
-                
-                # Floating golden KEY pill
-                painter.setPen(QPen(QColor(245, 158, 11), 1.5))
-                painter.setBrush(QColor(251, 191, 36, 230))
-                badge_w = 44 * pulse_scale
-                badge_h = 18 * pulse_scale
-                painter.drawRoundedRect(QRectF(kx - badge_w/2, ky - badge_h/2, badge_w, badge_h), 6.0, 6.0)
-                
-                painter.setFont(QFont("Segoe UI", 8, QFont.Weight.Black))
-                painter.setPen(QColor("#78350f"))
-                painter.drawText(QRectF(kx - badge_w/2, ky - badge_h/2, badge_w, badge_h), Qt.AlignmentFlag.AlignCenter, "🔑 KEY")
+        # Short Slot Code: P, OC, IC, T
+        short_names = {"Point": "P", "OC": "OC", "IC": "IC", "Tail": "T"}
+        s_code = short_names.get(slot, slot)
+        painter.setFont(QFont("Segoe UI", 7, QFont.Weight.Black))
+        painter.setPen(QColor("#ffffff"))
+        painter.drawText(QRectF(psx - pin_r, psy - pin_r, pin_r * 2, pin_r * 2), Qt.AlignmentFlag.AlignCenter, s_code)
 
-        # Head Switch Alert Banner above flyer
-        if state.head_switch_active:
-            hs_lbl_x, hs_lbl_y, _ = project_3d_point(head_x, head_y, head_z + 10.0, self.yaw, self.pitch, self.zoom, self.pan_x, self.pan_y, cx, cy)
-            painter.setPen(QPen(QColor(234, 179, 8), 1.2))
-            painter.setBrush(QColor(30, 41, 59, 210))
-            painter.drawRoundedRect(QRectF(hs_lbl_x - 45, hs_lbl_y - 10, 90, 20), 4.0, 4.0)
-            painter.setFont(QFont("Segoe UI", 7, QFont.Weight.Bold))
-            painter.setPen(QColor(253, 224, 71))
-            painter.drawText(QRectF(hs_lbl_x - 45, hs_lbl_y - 10, 90, 20), Qt.AlignmentFlag.AlignCenter, "👀 HEAD SWITCH")
+        # If Keyer, show small golden key icon beside badge
+        if is_keyer:
+            painter.setFont(QFont("Segoe UI", 8))
+            painter.setPen(QColor("#f59e0b"))
+            painter.drawText(QRectF(psx + pin_r + 2, psy - 8, 16, 16), Qt.AlignmentFlag.AlignCenter, "🔑")
 
         painter.restore()
 
     def _draw_viewport_hud(self, painter: QPainter):
-        """Draws screen-space HUD overlay elements (Current Formation, Phase, Controls)."""
+        """Draws screen-space HUD overlay elements (Current Formation, Phase, Bottom Slot Bar)."""
         painter.save()
         w = self.width()
+        h = self.height()
 
-        # Formation Name & Code Badge (Top Left)
+        # 1. Formation Name & Code Badge (Top Left)
         if self.current_formation:
             f = self.current_formation
-            badge_rect = QRectF(15, 15, 260, 64)
-            painter.setPen(QPen(QColor(56, 189, 248, 120), 1.0))
-            painter.setBrush(QColor(15, 23, 42, 220))
+            badge_rect = QRectF(15, 15, 270, 60)
+            painter.setPen(QPen(QColor(56, 189, 248, 100), 1.0))
+            painter.setBrush(QColor(15, 23, 42, 210))
             painter.drawRoundedRect(badge_rect, 8.0, 8.0)
 
             # Code Box
-            code_rect = QRectF(25, 25, 42, 42)
+            code_rect = QRectF(23, 23, 44, 44)
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(QColor("#38bdf8") if not f.is_block else QColor("#f43f5e"))
             painter.drawRoundedRect(code_rect, 6.0, 6.0)
@@ -808,40 +940,71 @@ class Formation3DWidget(QWidget):
             painter.drawText(code_rect, Qt.AlignmentFlag.AlignCenter, f.code)
 
             # Title & Subtitle
-            painter.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+            painter.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
             painter.setPen(QColor("#f8fafc"))
-            painter.drawText(QRectF(75, 23, 190, 22), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, f.name)
+            painter.drawText(QRectF(75, 22, 200, 22), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, f.name)
 
             painter.setFont(QFont("Segoe UI", 8, QFont.Weight.Normal))
             painter.setPen(QColor("#94a3b8"))
             cat_str = f"BLOCK ({f.points} Pts) • {f.subgroup_split}" if f.is_block else f"RANDOM ({f.points} Pt)"
-            painter.drawText(QRectF(75, 45, 190, 18), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, cat_str)
+            painter.drawText(QRectF(75, 42, 200, 18), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, cat_str)
 
-        # 3D Navigation Guide (Bottom Left)
-        nav_rect = QRectF(15, self.height() - 40, 280, 25)
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(15, 23, 42, 180))
-        painter.drawRoundedRect(nav_rect, 4.0, 4.0)
-        painter.setFont(QFont("Segoe UI", 8))
-        painter.setPen(QColor("#94a3b8"))
-        painter.drawText(nav_rect, Qt.AlignmentFlag.AlignCenter, "🖱️ Links-Klick: 3D Orbit | Scroll/Rechts: Zoom | Rad-Klick: Pan")
-
-        # Phase Badge for Blocks (Top Right)
+        # 2. Phase Indicator (Top Right for Blocks)
         if self.current_formation and self.current_formation.is_block:
-            phase_str = "1. INITIAL BUILD"
-            if self.current_phase > 1.4:
-                phase_str = "3. CLOSING BUILD"
-            elif self.current_phase > 0.4:
-                phase_str = "2. INTER PICTURE"
+            phase_pct = int(self.current_phase / 2.0 * 100)
+            phase_name = "1. Initial Build" if self.current_phase < 0.3 else ("3. Close Build" if self.current_phase > 1.7 else "2. Inter Movement")
 
-            p_rect = QRectF(w - 200, 15, 185, 34)
-            painter.setPen(QPen(QColor(244, 63, 94, 140), 1.0))
-            painter.setBrush(QColor(15, 23, 42, 220))
+            p_rect = QRectF(w - 210, 15, 195, 42)
+            painter.setPen(QPen(QColor(244, 63, 94, 120), 1.0))
+            painter.setBrush(QColor(15, 23, 42, 210))
             painter.drawRoundedRect(p_rect, 6.0, 6.0)
 
             painter.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
             painter.setPen(QColor("#fda4af"))
-            painter.drawText(p_rect, Qt.AlignmentFlag.AlignCenter, f"Phase: {phase_str}")
+            painter.drawText(QRectF(w - 205, 19, 185, 18), Qt.AlignmentFlag.AlignCenter, f"{phase_name} ({phase_pct}%)")
+
+            # Progress Bar
+            bar_w = 175
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(51, 65, 85, 180))
+            painter.drawRoundedRect(QRectF(w - 200, 41, bar_w, 6), 3.0, 3.0)
+            painter.setBrush(QColor("#f43f5e"))
+            painter.drawRoundedRect(QRectF(w - 200, 41, bar_w * (self.current_phase / 2.0), 6), 3.0, 3.0)
+
+        # 3. Bottom Slot & Key Legend Bar (Centered at Bottom)
+        # Keeps formation view completely clean!
+        bar_w = min(560.0, w - 30.0)
+        bar_rect = QRectF((w - bar_w) / 2.0, h - 42, bar_w, 32)
+        painter.setPen(QPen(QColor(51, 65, 85, 160), 1.0))
+        painter.setBrush(QColor(15, 23, 42, 220))
+        painter.drawRoundedRect(bar_rect, 6.0, 6.0)
+
+        # 4 Slots in Legend
+        slots_data = [
+            ("Point", COLOR_POINT, "🔴"),
+            ("OC", COLOR_OC, "🟢"),
+            ("IC", COLOR_IC, "🔵"),
+            ("Tail", COLOR_TAIL, "🟡")
+        ]
+        slot_w = bar_w / 4.0
+        for idx, (s_name, s_col, s_dot) in enumerate(slots_data):
+            sx = bar_rect.x() + idx * slot_w
+            is_k = False
+            if self.current_formation and (s_name in self.current_formation.primary_key_slot or
+               (s_name == "IC" and "Inside Center" in self.current_formation.primary_key_slot) or
+               (s_name == "OC" and "Outside Center" in self.current_formation.primary_key_slot)):
+                is_k = True
+
+            txt = f"{s_name}" + (" 🔑" if is_k else "")
+            painter.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold if is_k else QFont.Weight.Normal))
+            painter.setPen(QColor(s_col))
+            painter.drawText(QRectF(sx, h - 42, slot_w, 32), Qt.AlignmentFlag.AlignCenter, txt)
+
+        # 4. View Shortcut Hint (Bottom Left)
+        hint_rect = QRectF(15, h - 38, 200, 24)
+        painter.setFont(QFont("Segoe UI", 8))
+        painter.setPen(QColor("#64748b"))
+        painter.drawText(hint_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, "[V] Draufsicht/3D • [Space] Play")
 
         painter.restore()
 

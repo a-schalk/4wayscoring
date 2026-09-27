@@ -39,6 +39,15 @@ class SlotDetail:
 
 
 @dataclass
+class PieceKinematics:
+    """Kinematic movement definition for a piece during block transition."""
+    slots: List[str]                  # e.g. ["Point", "OC"]
+    rotation_deg: float = 0.0         # Rotation in degrees (e.g. +360, -360, +540, +180, -90)
+    pivot_mode: str = "center"        # "center" (piece midpoint), or slot name e.g. "Point"
+    vertical_arch: float = 0.0        # Z arch during inter (e.g. +16.0 for over, -16.0 for under)
+
+
+@dataclass
 class FormationDefinition:
     """Complete specification for a random or block formation."""
     code: str              # "A", "B", ... or "1", "2", ... "22"
@@ -67,8 +76,65 @@ class FormationDefinition:
     state_inter_vertical: Optional[Dict[str, Flyer3DState]] = None
     state_close_vertical: Optional[Dict[str, Flyer3DState]] = None
     
+    # Kinematic Piece Definitions
+    pieces: List[PieceKinematics] = field(default_factory=list)
+    pieces_vertical: List[PieceKinematics] = field(default_factory=list)
+
     # Slot Details (Point, OC, IC, Tail, Videographer)
     slot_details: Dict[str, SlotDetail] = field(default_factory=dict)
+
+
+def get_block_piece_kinematics(
+    formation: FormationDefinition, use_vertical: bool = False
+) -> List[PieceKinematics]:
+    """Resolves or dynamically computes exact piece kinematics for a block."""
+    if not formation.is_block:
+        return []
+
+    if use_vertical and formation.pieces_vertical:
+        return formation.pieces_vertical
+    if formation.pieces:
+        return formation.pieces
+
+    # Dynamic piece generation from FAI block rules
+    split = formation.subgroup_split
+    deg_str = formation.inter_degrees
+
+    # 3-Way / Solo blocks (e.g. Block 2, 4, 10, 13)
+    if "3-Way" in split or "Solo" in split:
+        solo_slot = "Point"
+        if "Solo (Tail)" in split:
+            solo_slot = "Tail"
+        elif "Solo (OC)" in split:
+            solo_slot = "OC"
+        elif "Solo (IC)" in split:
+            solo_slot = "IC"
+
+        three_way_slots = [s for s in ["Point", "OC", "IC", "Tail"] if s != solo_slot]
+        rot_3way = 360.0 if "360" in deg_str else 180.0
+        rot_solo = 360.0 if "Solo 360" in deg_str else 0.0
+        return [
+            PieceKinematics(slots=three_way_slots, rotation_deg=rot_3way, pivot_mode="center"),
+            PieceKinematics(slots=[solo_slot], rotation_deg=rot_solo, pivot_mode="center")
+        ]
+
+    # 2-Way / 2-Way blocks
+    # Block 12 is special: Front piece 540°, Rear piece 360°
+    if formation.code == "12" or "540" in deg_str:
+        return [
+            PieceKinematics(slots=["Point", "OC"], rotation_deg=540.0, pivot_mode="center", vertical_arch=16.0 if use_vertical else 0.0),
+            PieceKinematics(slots=["IC", "Tail"], rotation_deg=360.0, pivot_mode="center", vertical_arch=-16.0 if use_vertical else 0.0)
+        ]
+
+    # Standard 2-Way / 2-Way
+    rot = 180.0 if "180" in deg_str else 360.0
+    vert_p1 = 16.0 if (use_vertical and formation.supports_vertical) else 0.0
+    vert_p2 = -16.0 if (use_vertical and formation.supports_vertical) else 0.0
+
+    return [
+        PieceKinematics(slots=["Point", "OC"], rotation_deg=rot, pivot_mode="center", vertical_arch=vert_p1),
+        PieceKinematics(slots=["IC", "Tail"], rotation_deg=rot, pivot_mode="center", vertical_arch=vert_p2)
+    ]
 
 
 # Standard SDC Rhythm XP Colors (as shown in Continuity Booklet)

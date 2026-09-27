@@ -113,9 +113,17 @@ _shared_main_win = None
 
 def _get_shared_main_win():
     global _shared_main_win
+    if _shared_main_win is not None:
+        try:
+            _ = _shared_main_win.windowTitle()
+        except RuntimeError:
+            _shared_main_win = None
+
     if _shared_main_win is None:
         from scoring import DebriefMainWindow
         _shared_main_win = DebriefMainWindow()
+        if hasattr(_shared_main_win, "timer") and _shared_main_win.timer.isActive():
+            _shared_main_win.timer.stop()
     return _shared_main_win
 
 
@@ -285,6 +293,24 @@ def test_formation_3d_and_continuity_booklet():
     main_win._open_3d_explorer_for_formation("B", 0)
     assert main_win._formation_explorer_window.detail_widget.current_formation.code == "B"
 
+    # 5. Verify Piece Kinematics (rigid distance preservation & 360°/540° sweeps)
+    import math
+    f_b1 = formation_db.get_formation("1")
+    s_init = f_b1.state_initial
+    initial_dist = math.hypot(s_init["Point"].x - s_init["OC"].x, s_init["Point"].y - s_init["OC"].y)
+
+    # Test at phase 1.0 (midway 180° turned)
+    states_mid = formation_tool.interpolate_piece_kinematics(f_b1, phase=1.0)
+    mid_dist = math.hypot(states_mid["Point"].x - states_mid["OC"].x, states_mid["Point"].y - states_mid["OC"].y)
+    assert abs(mid_dist - initial_dist) < 0.5  # Piece partners distance rigidly preserved!
+
+    # Test Block 12 (540° front piece)
+    f_b12 = formation_db.get_formation("12")
+    states_b12_mid = formation_tool.interpolate_piece_kinematics(f_b12, phase=1.0)
+    # Midway through 540° is 270° rotation
+    p0_deg = f_b12.state_initial["Point"].heading_deg
+    assert abs((states_b12_mid["Point"].heading_deg - p0_deg - 270.0) % 360.0) < 1.0
+
 
 def main():
     start = time.time()
@@ -292,23 +318,27 @@ def main():
     print("🚀 FAI 4-Way Debriefing Suite: Automated Headless Test Runner")
     print("=" * 60)
 
+    from PyQt6.QtWidgets import QApplication
+    app = QApplication.instance() or QApplication(sys.argv)
+
     suites = [
         ("Python Syntax & Compilation", test_syntax),
         ("FAI Dive Pool & Sequence Logic", test_dive_pool_logic),
         ("Timing Math & Working Time Models", test_timing_and_models),
-        ("GUI Offscreen, Selection & Table Edit", test_gui_and_interactions),
         ("Rhythm XP Card Manager & Pixmaps", test_card_manager),
-        ("Training DB & FAI AAA Draw Generator", test_training_db_and_draw_generator),
         ("3D Formation Explorer & Continuity Booklet", test_formation_3d_and_continuity_booklet),
+        ("GUI Offscreen, Selection & Table Edit", test_gui_and_interactions),
+        ("Training DB & FAI AAA Draw Generator", test_training_db_and_draw_generator),
     ]
 
     passed = 0
     for name, func in suites:
+        print(f"  ▶ RUN: {name}", flush=True)
         t0 = time.time()
         try:
             func()
             elapsed = time.time() - t0
-            print(f"  ✅ PASS: {name} ({elapsed:.3f}s)")
+            print(f"  ✅ PASS: {name} ({elapsed:.3f}s)", flush=True)
             passed += 1
         except Exception as e:
             elapsed = time.time() - t0

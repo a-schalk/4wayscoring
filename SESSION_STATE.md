@@ -9,7 +9,7 @@
 - **Git Commit:** Pending (`Fix 3D Formation view, align with Rhythm XP Continuity Booklet, and overhaul layout`)
 - **Active Branch:** `main`
 - **Working Tree:** Clean / Ready to commit
-- **Test Status:** ✅ 7/7 Test suites passing in 0.52s (`python3 tests/run_tests.py`)
+- **Test Status:** ✅ 7/7 Test suites passing in 0.48s (`python3 tests/run_tests.py`)
 
 ---
 
@@ -42,6 +42,11 @@
      - Detail-Ansichten mit aufgeräumten Info-Karten für Key-Mechanik, Coach-Tipps, Bust-Gefahren und 5-Schritte-Debriefing-Checkliste versehen.
      - 3D-Kamera-Zoom verdoppelt (2.2x) für optimale Erkennbarkeit der Flyer und Grips, farbige High-Contrast Pill-Badges hinter den Slot-Namen.
      - Filter-Buttons links auf ein aufgeräumtes 2x2 Raster umgestellt (`Alle`, `Randoms`, `Blocks`, `Vertikal`), kein Abschneiden mehr.
+8. **Piece-Based Kinematics Engine & Volumetric 3D Shading (Option A):**
+   - **Kinematics Engine (`PieceKinematics`, `interpolate_piece_kinematics`):** Ersetzt die fehlerhafte lineare `lerp`-Interpolation durch polare orbitale Rotationsmechanik. Drehungen über 360°, 540° und 180° rotieren Subgruppen/Pieces exakt um ihren Drehpunkt. Flyer durchdringen sich nicht mehr und halten ihren Partnerabstand auf das Millionstel exakt (`diff = 0.0`).
+   - **Volumetrische 3D-Modelle:** Flyer besitzen nun echte 3D-Tiefe mit schattiertem Torso, Fallschirm-Gurtzeug (Charcoal-Rig mit Pin-Flap), 3D-Helm mit radialem Glanzlicht und richtungsweisendem Visier entlang des Blickvektors, Mantis-Beinen mit sichtbaren Außengriffen und Booties sowie Armen mit weißen Handgelenkmanschetten.
+   - **Entrümpelung (Decluttering):** Alle riesigen Textboxen und Banner direkt über den Flyern wurden entfernt. Griffe und Figuren sind völlig unverdeckt sichtbar. Subtile 16px Pin-Badges an den Beinen (`P`, `OC`, `IC`, `T`), dezente goldene Keyer-Aura und eine aufgeräumte Statusleiste am unteren Bildrand sorgen für perfekte Übersicht.
+   - **Kamera & Shortcuts:** Taste `[V]` schaltet sofort zwischen Draufsicht (Top-Down Coach-View, 2D) und 3D-Perspektive um, `[Leertaste]` pausiert/startet die Animation.
 
 ---
 

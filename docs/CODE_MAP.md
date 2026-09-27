@@ -73,24 +73,27 @@ The central briefing, debriefing, scoring, and video analytics application.
 
 ---
 
-## 📦 `src/formation_tool.py` (~1565 lines)
+## 📦 `src/formation_tool.py` (~1730 lines)
 
 The standalone and integrated 3D formation explorer.
 
-- `Formation3DWidget(QWidget)` (Line 120): Custom OpenGL/QPainter 3D rendering widget showing the 4 flyers with high-contrast pill badges, 2.2x default zoom, relative orientations, grips, and head switch lines.
-- `FormationDetailWidget(QWidget)` (Line 850): Side panel with 6 compact tabs (`📖 Continuity`, `📋 Übersicht`, `🔴 Point`, `🟢 OC`, `🔵 IC`, `🟡 Tail`), official Rhythm XP continuity strip image, structured coach tips, bust pitfalls, and 5-step checklist.
-- `FormationExplorerWindow(QMainWindow)` (Line 1133): Full application window with 2x2 category filter buttons (`Alle`, `Randoms`, `Blocks`, `Vertikal`), search filter, `select_formation(code, part)` lifecycle handler, phase slider, and launch button for scoring.
+- `interpolate_piece_kinematics(formation, phase, use_vertical) -> Dict[str, Flyer3DState]` (Line 89): Polar orbital piece kinematics engine preserving exact rigid partner distances during 360°, 540°, and 180° rotations.
+- `Formation3DWidget(QWidget)` (Line 230): Volumetric 3D skydiver rendering engine (shaded 3D torso with depth, charcoal parachute rig, directional helmet visor, leg/wrist grippers, drag booties, decluttered circular pins, golden keyer halo, and clean bottom HUD bar). Keyboard shortcuts: `[V]` (Top-Down/3D toggle), `[Space]` (Play/Pause).
+- `FormationDetailWidget(QWidget)` (Line 950): Side panel with 6 compact tabs (`📖 Continuity`, `📋 Übersicht`, `🔴 Point`, `🟢 OC`, `🔵 IC`, `🟡 Tail`), official Rhythm XP continuity strip image, structured coach tips, bust pitfalls, and 5-step checklist.
+- `FormationExplorerWindow(QMainWindow)` (Line 1230): Full application window with 2x2 category filter buttons (`Alle`, `Randoms`, `Blocks`, `Vertikal`), search filter, `select_formation(code, part)` lifecycle handler, phase slider, and launch button for scoring.
 
 ---
 
-## 📦 `src/formation_db.py` (~1300 lines)
+## 📦 `src/formation_db.py` (~1380 lines)
 
-FAI 4-Way Dive Pool database and 3D coordinate definitions.
+FAI 4-Way Dive Pool database, Piece Kinematics, and 3D coordinate definitions.
 
-- `Flyer3DState`: 3D position $(x, y, z)$, yaw rotation, head switch state.
+- `Flyer3DState`: 3D position $(x, y, z)$, yaw rotation, head switch state, grips, and presented grippers.
+- `PieceKinematics`: Subgroup piece kinematic spec (slots, rotation degrees, pivot mode, vertical arch).
+- `get_block_piece_kinematics(formation, use_vertical)`: Resolves or dynamically computes exact piece kinematics for all 22 blocks.
 - `SlotDetail`: Slot name (Point, Outside Center, Inside Center, Tail), color, grip targets.
 - SDC Rhythm XP Standard Colors: `COLOR_POINT` (#EF4444 Red), `COLOR_OC` (#10B981 Green), `COLOR_IC` (#3B82F6 Blue), `COLOR_TAIL` (#EAB308 Yellow).
-- `FormationDefinition`: Code, name, is_block, flyer states for start/close phases, grip definitions.
+- `FormationDefinition`: Code, name, is_block, flyer states for start/close phases, pieces kinematics, grip definitions.
 - `_build_dive_pool()`: Constructs all 16 Randoms (A–Q) and 22 Blocks (1–22).
 - `get_formation(code: str) -> Optional[FormationDefinition]`: Retrieval helper.
 
