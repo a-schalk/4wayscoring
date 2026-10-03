@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>4-Way FS – 3D Formationen &amp; Blöcke</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; font-family: system-ui, sans-serif; }
+  #c { display: block; width: 100%; height: 100%; }
+  #panel {
+    position: absolute; top: 12px; left: 12px; width: 300px; padding: 12px 14px;
+    background: rgba(255,255,255,0.9); border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    font-size: 14px;
+  }
+  #panel h1 { font-size: 17px; margin: 0 0 8px; }
+  #panel select, #panel input[type=range] { width: 100%; }
+  #panel button { margin: 4px 4px 4px 0; padding: 4px 10px; cursor: pointer; }
+  #phase { font-weight: 600; margin: 6px 0; min-height: 1.2em; }
+  #info { font-size: 13px; margin: 6px 0; }
+  #info ul { margin: 4px 0; padding-left: 18px; }
+  .legend span { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+  .legend div { margin: 2px 0; }
+  .hint { font-size: 12px; color: #555; margin: 8px 0 0; }
+  #editor {
+    position: absolute; top: 12px; right: 12px; width: 330px; max-height: calc(100% - 48px); overflow: auto;
+    padding: 12px 14px; background: rgba(255,255,255,0.93); border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2); font-size: 13px;
+  }
+  #editor h2 { font-size: 16px; margin: 0 0 8px; }
+  #editor select, #editor input[type=text], #editor textarea { width: 100%; box-sizing: border-box; }
+  #editor textarea { font-family: monospace; font-size: 12px; }
+  #editor table { border-collapse: collapse; margin: 6px 0; }
+  #editor td, #editor th { padding: 1px 2px; }
+  #editor td input { width: 58px; }
+  #editor tr.sel { outline: 2px solid #333; }
+  #editor button { margin: 3px 3px 3px 0; padding: 3px 8px; cursor: pointer; }
+  .err { color: #c62828; min-height: 1em; }
+</style>
+<script src="formations.js"></script>
+<script src="refs.js"></script>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <h1>4-Way FS – 3D</h1>
+  <select id="sel"></select>
+  <div id="phase"></div>
+  <input id="scrub" type="range" min="0" max="1000" value="0">
+  <div>
+    <button id="play">Pause</button>
+    <button id="restart">Neustart</button>
+    <label><input id="loop" type="checkbox" checked> Loop</label>
+  </div>
+  <div><label><input id="pause" type="checkbox"> An Inter-Bildern anhalten</label></div>
+  <label>Tempo <input id="speed" type="range" min="0.25" max="2" step="0.05" value="1"></label>
+  <div>
+    Kamera:
+    <button data-cam="top">Oben</button>
+    <button data-cam="persp">Schräg</button>
+    <button data-cam="side">Seitlich</button>
+  </div>
+  <div><button id="editBtn">Bearbeiten</button></div>
+  <div><label><input id="refOn" type="checkbox" checked> Workbook-Bilder</label></div>
+  <label>Deckkraft <input id="refOpacity" type="range" min="0.1" max="1" step="0.05" value="0.7"></label>
+  <label>Bildgröße <input id="refSize" type="range" min="0.7" max="1.3" step="0.01" value="1"></label>
+  <div id="info"></div>
+  <div class="legend">
+    <div><span style="background:#e53935"></span>Point</div>
+    <div><span style="background:#43a047"></span>Outside Center</div>
+    <div><span style="background:#1e63d6"></span>Inside Center</div>
+    <div><span style="background:#fdd835"></span>Tail</div>
+  </div>
+  <p class="hint">Maus: drehen/zoomen · Leertaste: Play/Pause · Pfeil links = Flugrichtung.
+    Posen aus den Workbook-Grafiken erkannt, Drehrichtungen teils geschätzt.</p>
+</div>
+
+<div id="editor" hidden>
+  <h2>Editor</h2>
+  <label>Bild <select id="frameSel"></select></label>
+  <label>Name <input id="frameName" type="text"></label>
+  <table>
+    <thead><tr><th></th><th>x</th><th>y</th><th>Kopf°</th><th>Höhe</th></tr></thead>
+    <tbody id="poseBody"></tbody>
+  </table>
+  <div id="interBtns">
+    <button id="addInter">Inter danach einfügen</button>
+    <button id="delInter">Inter löschen</button>
+  </div>
+  <div id="piecesBox">
+    <label>Pieces (JSON) – <code>m</code> Mitglieder, <code>rot</code> Grad (− = Uhrzeigersinn), <code>lift</code> Höhe</label>
+    <textarea id="piecesTxt" rows="5"></textarea>
+    <div id="piecesErr" class="err"></div>
+  </div>
+  <p class="hint">Springer anklicken und ziehen · Q/E drehen (Shift = 15°) · R/F Höhe · Pfeiltasten verschieben.
+    Kopfrichtung in Inters kumulativ angeben (z.B. −270 nach drei Vierteln einer Drehung im Uhrzeigersinn).
+    Änderungen werden automatisch im Browser gespeichert.</p>
+  <div>
+    <button id="exportBtn">formations.js exportieren</button>
+    <button id="importBtn">Importieren</button>
+    <button id="resetBtn">Zurücksetzen</button>
+    <input id="importFile" type="file" accept=".js,.json" hidden>
+  </div>
+  <div id="storeInfo" class="hint"></div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const ROLES = ['R', 'G', 'B', 'Y'];
+const ROLE = {
+  R: { name: 'Point', short: 'P', color: 0xe53935 },
+  G: { name: 'Outside Center', short: 'OC', color: 0x43a047 },
+  B: { name: 'Inside Center', short: 'IC', color: 0x1e63d6 },
+  Y: { name: 'Tail', short: 'T', color: 0xfdd835 },
+};
+const SCALE = 1.35;
+const DEG = Math.PI / 180;
+
+const STORE_KEY = 'fs4way-data-v1';
+const clone = o => JSON.parse(JSON.stringify(o));
+// Deep-Copy: in formations.js teilen sich manche Blöcke dieselben Pose-Objekte
+let DATA = clone(window.FS_DATA), fromStorage = false;
+try {
+  const saved = localStorage.getItem(STORE_KEY);
+  if (saved) { const d = JSON.parse(saved); validateData(d); DATA = d; fromStorage = true; }
+} catch { /* beschädigter Speicher -> Originaldaten */ }
+
+// Referenzbild-Schlüssel (refs.js) über Block-ID+Variante zuordnen, falls noch nicht vorhanden
+function assignRefs(d) {
+  const idx = new Map(window.FS_DATA.blocks.map((b, i) => [`${b.id}|${b.variant}`, String(i).padStart(2, '0')]));
+  for (const b of d.blocks) {
+    const k = idx.get(`${b.id}|${b.variant}`);
+    if (k === undefined) continue;
+    b.fromRef ??= `b${k}_0`;
+    b.inters.forEach((it, i) => { if (!('ref' in it)) it.ref = `b${k}_${i + 1}`; });
+    b.toRef ??= `b${k}_${b.inters.length + 1}`;
+  }
+  for (const r of d.randoms) r.ref ??= `r_${r.id}`;
+}
+assignRefs(DATA);
+
+// ---------- Szene ----------
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xa9d3f5);
+const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 200);
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x556677, 1.6));
+const sun = new THREE.DirectionalLight(0xffffff, 1.4);
+sun.position.set(5, 12, 4);
+scene.add(sun);
+
+const grid = new THREE.GridHelper(16, 16, 0x6a8fb0, 0x8fb3d3);
+grid.position.y = -2.5;
+scene.add(grid);
+const cross = new THREE.LineSegments(
+  new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(-3, -2.49, 0), new THREE.Vector3(3, -2.49, 0),
+    new THREE.Vector3(0, -2.49, -3), new THREE.Vector3(0, -2.49, 3),
+  ]),
+  new THREE.LineBasicMaterial({ color: 0x334455 })
+);
+scene.add(cross);
+scene.add(new THREE.ArrowHelper(new THREE.Vector3(-1, 0, 0), new THREE.Vector3(6, -2.45, -6), 3, 0xffffff, 0.6, 0.4));
+
+// ---------- Springer-Modell (Bauch unten, Kopf Richtung -z) ----------
+function limb(a, b, r, mat) {
+  const dir = b.clone().sub(a);
+  const mesh = new THREE.Mesh(new THREE.CapsuleGeometry(r, dir.length(), 4, 10), mat);
+  mesh.position.copy(a).add(b).multiplyScalar(0.5);
+  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+  return mesh;
+}
+
+function label(text, color) {
+  const c = document.createElement('canvas');
+  c.width = 128; c.height = 64;
+  const g = c.getContext('2d');
+  g.fillStyle = 'rgba(0,0,0,0.55)';
+  g.beginPath(); g.roundRect(4, 8, 120, 48, 12); g.fill();
+  g.fillStyle = '#' + color.toString(16).padStart(6, '0');
+  g.font = 'bold 34px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(text, 64, 33);
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false }));
+  s.scale.set(0.8, 0.4, 1);
+  s.position.set(0, 0.9, 0);
+  return s;
+}
+
+function makeFlyer(role) {
+  const V = (x, y, z) => new THREE.Vector3(x, y, z);
+  const suit = new THREE.MeshStandardMaterial({ color: ROLE[role].color, roughness: 0.6 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 });
+  const body = new THREE.Group();
+
+  const torso = limb(V(0, 0, 0.35), V(0, 0, -0.35), 0.2, suit);
+  torso.scale.set(1.4, 1, 0.75);
+  body.add(torso);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.17, 16, 12), dark);
+  head.position.set(0, 0.05, -0.72);
+  body.add(head);
+
+  for (const s of [-1, 1]) {
+    const sh = V(0.26 * s, 0, -0.3), el = V(0.62 * s, 0, -0.45), ha = V(0.62 * s, 0.05, -0.85);
+    body.add(limb(sh, el, 0.08, suit), limb(el, ha, 0.07, suit));
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 8), dark);
+    hand.position.copy(ha);
+    body.add(hand);
+    const hip = V(0.13 * s, 0, 0.35), kn = V(0.3 * s, 0, 0.85), ft = V(0.33 * s, 0.45, 1.05);
+    body.add(limb(hip, kn, 0.1, suit), limb(kn, ft, 0.08, suit));
+    const foot = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), dark);
+    foot.position.copy(ft);
+    body.add(foot);
+  }
+  body.scale.setScalar(1.25);
+  body.userData.role = role;
+
+  const root = new THREE.Group();
+  root.add(body, label(ROLE[role].short, ROLE[role].color));
+  root.userData.body = body;
+  root.userData.suit = suit;
+  scene.add(root);
+  return root;
+}
+
+const flyers = Object.fromEntries(ROLES.map(r => [r, makeFlyer(r)]));
+
+function applyPose(pose) {
+  for (const r of ROLES) {
+    const [x, y, h, z = 0] = pose[r];
+    flyers[r].position.set(x * SCALE, z * SCALE * 0.8, -y * SCALE);
+    flyers[r].userData.body.rotation.y = h * DEG;
+  }
+}
+
+// ---------- Übergangslogik: Pieces als starre Körper ----------
+const wrap = a => { a = ((a + 180) % 360 + 360) % 360 - 180; return a === -180 ? 180 : a; };
+const rot2 = ([x, y], a) => { const c = Math.cos(a * DEG), s = Math.sin(a * DEG); return [x * c - y * s, x * s + y * c]; };
+const mean = (pose, ms) => ms.reduce((acc, m) => [acc[0] + pose[m][0] / ms.length, acc[1] + pose[m][1] / ms.length], [0, 0]);
+const ease = t => t * t * (3 - 2 * t);
+const sum = a => a.reduce((s, v) => s + v, 0);
+
+// Segmentdrehung in Drehrichtung dir; kleine Rückwärtskorrekturen bleiben kurz
+function segDelta(h0, h1, dir) {
+  const s = wrap(h1 - h0);
+  if (!dir || Math.sign(s) === dir || Math.abs(s) < 45) return s;
+  return s + 360 * dir;
+}
+
+function planBlock(item) {
+  const inters = item.inters ?? [];
+  const frames = [item.from, ...inters.map(i => i.pose), item.to];
+  const names = [item.fromName, ...inters.map(i => i.name), item.toName];
+  const used = new Set(item.pieces.flatMap(p => p.m));
+  const specs = [...item.pieces, ...ROLES.filter(r => !used.has(r)).map(r => ({ m: [r] }))];
+  const deltas = specs.map(spec => {
+    const ref = spec.m[0], dir = spec.rot ? Math.sign(spec.rot) : 0;
+    const ds = frames.slice(1).map((fr, i) => segDelta(frames[i][ref][2], fr[ref][2], dir));
+    if (spec.rot !== undefined) {
+      // Nur ganze Zusatzdrehungen ergänzen, wenn die Bilder deutlich weniger Drehung zeigen
+      const diff = spec.rot - sum(ds);
+      const k = Math.abs(diff) > 200 ? Math.round(diff / 360) : 0;
+      if (k) {
+        const big = ds.reduce((bi, d, j) => (Math.abs(d) > Math.abs(ds[bi]) ? j : bi), 0);
+        ds[big] += 360 * k;
+      }
+    }
+    return ds;
+  });
+  const single = frames.length === 2;
+  const segs = frames.slice(1).map((to, i) =>
+    planSegment(frames[i], to, specs, deltas.map(d => d[i]), single ? null : 0.2, single ? 1.2 : 0.5));
+  let t = 0;
+  for (const s of segs) { s.start = t; t += s.dur; }
+  return { frames, names, specs, segs, totals: deltas.map(sum), dur: t,
+    refs: [item.fromRef, ...inters.map(i => i.ref), item.toRef] };
+}
+
+function planSegment(from, to, specs, ds, sepDefault, baseDur) {
+  const pieces = specs.map((spec, i) => {
+    const ms = spec.m, d = ds[i];
+    const c0 = mean(from, ms), c1 = mean(to, ms);
+    const th0 = from[ms[0]][2], th1 = to[ms[0]][2];
+    const members = ms.map(m => {
+      const [x0, y0, h0, z0 = 0] = from[m], [x1, y1, h1, z1 = 0] = to[m];
+      const l0 = h0 - th0;
+      const o0 = rot2([x0 - c0[0], y0 - c0[1]], -th0), o1 = rot2([x1 - c1[0], y1 - c1[1]], -th1);
+      // Polar interpolieren, damit Piece-Partner nicht durcheinander hindurch laufen
+      const a0 = Math.atan2(o0[1], o0[0]) / DEG, a1 = Math.atan2(o1[1], o1[0]) / DEG;
+      return {
+        m, z0, z1, l0, dl: wrap((h1 - th1) - l0),
+        r0: Math.hypot(...o0), r1: Math.hypot(...o1), a0, da: wrap(a1 - a0),
+      };
+    });
+    const sep = spec.sep ?? sepDefault ?? (Math.abs(d) >= 90 ? 0.9 : 0.35);
+    return { spec, c0, c1, th0, d, members, sep, lift: spec.lift ?? 0 };
+  });
+  const maxRot = Math.max(...pieces.map(p => Math.abs(p.d)));
+  return { from, to, pieces, dur: baseDur + (maxRot / 360) * 1.8 };
+}
+
+// Pose in Segment i bei lokalem t (linear); Höhenversatz läuft über den ganzen Block
+function segPose(plan, i, t) {
+  const seg = plan.segs[i], e = t, bump = Math.sin(Math.PI * e);
+  const lb = Math.sin(Math.PI * ((seg.start + t * seg.dur) / plan.dur));
+  const cf0 = mean(seg.from, ROLES), cf1 = mean(seg.to, ROLES);
+  const cf = [cf0[0] + (cf1[0] - cf0[0]) * e, cf0[1] + (cf1[1] - cf0[1]) * e];
+  const pose = {};
+  for (const p of seg.pieces) {
+    let cx = p.c0[0] + (p.c1[0] - p.c0[0]) * e, cy = p.c0[1] + (p.c1[1] - p.c0[1]) * e;
+    const dx = cx - cf[0], dy = cy - cf[1], dist = Math.hypot(dx, dy);
+    if (dist > 0.2) { cx += (dx / dist) * p.sep * bump; cy += (dy / dist) * p.sep * bump; }
+    const th = p.th0 + p.d * e;
+    for (const mb of p.members) {
+      const r = mb.r0 + (mb.r1 - mb.r0) * e, a = (mb.a0 + mb.da * e + th) * DEG;
+      const ox = r * Math.cos(a), oy = r * Math.sin(a);
+      pose[mb.m] = [cx + ox, cy + oy, th + mb.l0 + mb.dl * e, mb.z0 + (mb.z1 - mb.z0) * e + p.lift * lb];
+    }
+  }
+  return pose;
+}
+
+// ---------- Timeline ----------
+const HOLD_START = 1.0, HOLD_INTER = 0.8, HOLD_END = 1.2;
+let timeline = null, time = 0, playing = true, current = null;
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function describePiece(spec, total) {
+  const who = spec.m.map(m => ROLE[m].name).join(' + ');
+  const parts = [];
+  const deg = spec.rot ?? total;
+  if (Math.abs(deg) > 1) parts.push(`${Math.round(Math.abs(deg))}° ${deg < 0 ? 'im Uhrzeigersinn' : 'gegen den Uhrzeigersinn'}`);
+  if (spec.lift) parts.push(spec.lift > 0 ? 'steigt' : 'sinkt');
+  return `<li>${who}${parts.length ? ': ' + parts.join(', ') : ''}</li>`;
+}
+
+function buildTimeline(item, pauseAtInters) {
+  const plan = planBlock(item);
+  const n = plan.segs.length;
+  const phases = [{ hold: true, dur: HOLD_START, pose: plan.frames[0], label: plan.names[0], frame: 0 }];
+  if (pauseAtInters) {
+    plan.segs.forEach((s, i) => {
+      phases.push({ segs: [i], dur: s.dur });
+      phases.push({ hold: true, dur: i === n - 1 ? HOLD_END : HOLD_INTER, pose: segPose(plan, i, 1), label: plan.names[i + 1], frame: i + 1 });
+    });
+  } else {
+    phases.push({ segs: plan.segs.map((_, i) => i), dur: plan.dur });
+    phases.push({ hold: true, dur: HOLD_END, pose: segPose(plan, n - 1, 1), label: plan.names[n], frame: n });
+  }
+  let t = 0;
+  for (const p of phases) { p.start = t; t += p.dur; }
+  return { plan, phases, total: t };
+}
+
+function load(item) {
+  current = item;
+  if (item.pose) {
+    timeline = { static: true, pose: item.pose, total: 1 };
+    document.getElementById('phase').textContent = `${item.id} – ${item.name}`;
+    document.getElementById('info').innerHTML = 'Random (statisch)';
+  } else {
+    timeline = buildTimeline(item, document.getElementById('pause').checked);
+    const { plan } = timeline;
+    document.getElementById('info').innerHTML =
+      `<b>Block ${esc(item.id)}${item.variant ? ' (' + esc(item.variant) + ')' : ''}</b><ul>` +
+      plan.specs.map((s, i) => describePiece(s, plan.totals[i])).join('') + '</ul>' +
+      `Ablauf: ${plan.names.map(esc).join(' → ')}`;
+  }
+  time = 0;
+}
+
+function update(dt) {
+  if (!timeline) return;
+  if (timeline.static) { applyPose(timeline.pose); showRefs(current.ref, null, 0); return; }
+  if (playing) {
+    time += dt;
+    if (time > timeline.total) {
+      if (document.getElementById('loop').checked) time %= timeline.total;
+      else { time = timeline.total; setPlaying(false); }
+    }
+    document.getElementById('scrub').value = Math.round((time / timeline.total) * 1000);
+  }
+  const { plan, phases } = timeline;
+  const ph = phases.find(p => time < p.start + p.dur) ?? phases[phases.length - 1];
+  let pose, phase;
+  if (ph.hold) { pose = ph.pose; phase = ph.label; showRefs(plan.refs[ph.frame], null, 0); }
+  else {
+    // Easing über die ganze Phase, innerhalb der Segmente linear -> flüssig durch die Inters
+    let u = ease(Math.min(1, (time - ph.start) / ph.dur)) * ph.dur;
+    let i = ph.segs[0];
+    for (const j of ph.segs) {
+      i = j;
+      if (u <= plan.segs[j].dur) break;
+      u -= plan.segs[j].dur;
+    }
+    const t = Math.min(1, u / plan.segs[i].dur);
+    pose = segPose(plan, i, t);
+    phase = `${plan.names[i]} → ${plan.names[i + 1]}`;
+    showRefs(plan.refs[i], plan.refs[i + 1], t);
+  }
+  applyPose(pose);
+  document.getElementById('phase').textContent = phase;
+}
+
+// ---------- UI ----------
+const sel = document.getElementById('sel');
+let items = [];
+const blockText = b => `${b.id}: ${b.fromName} – ${b.toName}${b.variant ? ' (' + b.variant + ')' : ''}`;
+const randomText = r => `${r.id}: ${r.name}`;
+const itemText = it => (it.pose ? randomText(it) : blockText(it));
+function populateSelect() {
+  sel.innerHTML = '';
+  items = [];
+  for (const [label, list] of [['Blöcke', DATA.blocks], ['Randoms', DATA.randoms]]) {
+    const g = document.createElement('optgroup');
+    g.label = label;
+    for (const it of list) {
+      const o = document.createElement('option');
+      o.value = items.length; o.textContent = itemText(it);
+      items.push(it); g.appendChild(o);
+    }
+    sel.appendChild(g);
+  }
+}
+populateSelect();
+sel.onchange = () => { load(items[sel.value]); if (editing) { frameIdx = 0; refreshEditor(); } };
+document.getElementById('pause').onchange = () => load(current);
+
+const playBtn = document.getElementById('play');
+function setPlaying(p) { playing = p; playBtn.textContent = p ? 'Pause' : 'Play'; }
+playBtn.onclick = () => {
+  if (!playing && timeline && time >= timeline.total) time = 0;
+  setPlaying(!playing);
+};
+document.getElementById('restart').onclick = () => { time = 0; setPlaying(true); };
+document.getElementById('scrub').oninput = e => {
+  if (timeline && !editing) { time = (e.target.value / 1000) * timeline.total; setPlaying(false); }
+};
+window.addEventListener('keydown', e => {
+  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) && e.target.type !== 'range' && e.target.type !== 'checkbox') return;
+  if (editing) { editKey(e); return; }
+  if (e.code === 'Space') { e.preventDefault(); playBtn.click(); }
+});
+
+// Blickziel etwas nach links versetzt, damit die Formation nicht hinter dem Panel liegt
+const CAMS = { top: [14, 0.01], persp: [11, 10], side: [1.5, 12] };
+const setCam = k => {
+  const tx = editing ? 0 : -1.8, [y, z] = CAMS[k];
+  camera.position.set(tx, y * 1.35, z * 1.35);
+  controls.target.set(tx, 0, 0);
+  controls.update();
+};
+document.querySelectorAll('[data-cam]').forEach(b => b.onclick = () => setCam(b.dataset.cam));
+
+// ---------- Editor ----------
+let editing = false, frameIdx = 0, selRole = null, dragging = false;
+const $ = id => document.getElementById(id);
+const r2 = v => Math.round(v * 100) / 100;
+
+function frames(item) {
+  if (item.pose) return [{ pose: item.pose, ref: item.ref, label: 'Formation', getName: () => item.name, setName: v => { item.name = v; } }];
+  return [
+    { pose: item.from, ref: item.fromRef, label: 'Start', getName: () => item.fromName, setName: v => { item.fromName = v; } },
+    ...item.inters.map(it => ({ pose: it.pose, ref: it.ref, label: 'Inter', inter: true, getName: () => it.name, setName: v => { it.name = v; } })),
+    { pose: item.to, ref: item.toRef, label: 'Ende', getName: () => item.toName, setName: v => { item.toName = v; } },
+  ];
+}
+const currentFrame = () => { const fs = frames(current); return fs[Math.min(frameIdx, fs.length - 1)]; };
+
+function save() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(DATA)); fromStorage = true; } catch { /* z.B. Speicher voll */ }
+  updateStoreInfo();
+}
+function updateStoreInfo() {
+  $('storeInfo').textContent = fromStorage
+    ? 'Lokale Änderungen aktiv (im Browser gespeichert).' : 'Originaldaten aus formations.js.';
+}
+
+function validatePose(p, where) {
+  for (const r of ROLES) {
+    const v = p?.[r];
+    if (!Array.isArray(v) || v.length < 3 || v.some(n => typeof n !== 'number' || !Number.isFinite(n)))
+      throw new Error(`${where}: Pose für ${r} ungültig`);
+  }
+}
+function validatePieces(ps, where = 'Pieces') {
+  if (!Array.isArray(ps)) throw new Error(`${where}: Liste erwartet`);
+  const seen = new Set();
+  for (const p of ps) {
+    if (!Array.isArray(p?.m) || !p.m.length) throw new Error(`${where}: jedes Piece braucht "m"`);
+    for (const m of p.m) {
+      if (!ROLES.includes(m)) throw new Error(`${where}: unbekannte Rolle "${m}" (erlaubt: R, G, B, Y)`);
+      if (seen.has(m)) throw new Error(`${where}: ${m} ist in mehreren Pieces`);
+      seen.add(m);
+    }
+    for (const k of ['rot', 'lift']) {
+      if (p[k] !== undefined && (typeof p[k] !== 'number' || !Number.isFinite(p[k]))) throw new Error(`${where}: "${k}" muss eine Zahl sein`);
+    }
+  }
+}
+function validateData(d) {
+  if (!Array.isArray(d?.blocks) || !Array.isArray(d?.randoms)) throw new Error('"blocks" und "randoms" fehlen');
+  for (const b of d.blocks) {
+    const w = `Block ${b.id}`;
+    validatePose(b.from, w); validatePose(b.to, w); validatePieces(b.pieces, w);
+    b.inters ??= [];
+    b.inters.forEach(i => validatePose(i.pose, `${w} ${i.name}`));
+  }
+  for (const r of d.randoms) validatePose(r.pose, `Random ${r.id}`);
+}
+
+const poseBody = $('poseBody');
+for (const r of ROLES) {
+  const tr = document.createElement('tr');
+  tr.dataset.role = r;
+  tr.innerHTML = `<th style="color:#${ROLE[r].color.toString(16).padStart(6, '0')}">${ROLE[r].short}</th>` +
+    [0.1, 0.1, 5, 0.1].map((step, k) => `<td><input type="number" step="${step}" data-k="${k}"></td>`).join('');
+  tr.onclick = () => select(r);
+  poseBody.appendChild(tr);
+}
+poseBody.addEventListener('input', e => {
+  const v = parseFloat(e.target.value);
+  if (!Number.isFinite(v)) return;
+  const p = currentFrame().pose[e.target.closest('tr').dataset.role];
+  while (p.length < 4) p.push(0);
+  p[+e.target.dataset.k] = v;
+  save();
+});
+
+function refreshTable() {
+  const pose = currentFrame().pose;
+  for (const tr of poseBody.rows) {
+    tr.classList.toggle('sel', tr.dataset.role === selRole);
+    for (const inp of tr.querySelectorAll('input')) {
+      if (inp !== document.activeElement) inp.value = r2(pose[tr.dataset.role][+inp.dataset.k] ?? 0);
+    }
+  }
+}
+
+function refreshEditor() {
+  const fs = frames(current);
+  frameIdx = Math.min(frameIdx, fs.length - 1);
+  $('frameSel').replaceChildren(...fs.map((f, i) => {
+    const o = document.createElement('option');
+    o.value = i; o.textContent = `${f.label}: ${f.getName()}`;
+    return o;
+  }));
+  $('frameSel').value = frameIdx;
+  const f = currentFrame(), isBlock = !current.pose;
+  $('frameName').value = f.getName();
+  $('interBtns').hidden = !isBlock;
+  $('piecesBox').hidden = !isBlock;
+  $('delInter').disabled = !f.inter;
+  if (isBlock) {
+    $('piecesTxt').value = '[\n' + current.pieces.map(p => '  ' + JSON.stringify(p)).join(',\n') + '\n]';
+    $('piecesErr').textContent = '';
+  }
+  $('phase').textContent = `Editor: ${f.label} – ${f.getName()}`;
+  refreshTable();
+}
+
+function select(r) {
+  selRole = r;
+  for (const x of ROLES) flyers[x].userData.suit.emissive.setHex(x === r ? 0x555555 : 0x000000);
+  if (editing) refreshTable();
+}
+
+function setEditing(on) {
+  editing = on;
+  $('editor').hidden = !on;
+  $('editBtn').textContent = on ? 'Vorschau abspielen' : 'Bearbeiten';
+  if (on) { setPlaying(false); frameIdx = 0; setCam('top'); refreshEditor(); updateStoreInfo(); }
+  else { select(null); load(current); setPlaying(true); }
+}
+$('editBtn').onclick = () => setEditing(!editing);
+
+$('frameSel').onchange = e => { frameIdx = +e.target.value; refreshEditor(); };
+$('frameName').oninput = e => {
+  currentFrame().setName(e.target.value);
+  $('frameSel').selectedOptions[0].textContent = `${currentFrame().label}: ${e.target.value}`;
+  sel.selectedOptions[0].textContent = itemText(current);
+  $('phase').textContent = `Editor: ${currentFrame().label} – ${e.target.value}`;
+  save();
+};
+$('addInter').onclick = () => {
+  const fs = frames(current), at = Math.min(frameIdx, fs.length - 2);
+  current.inters.splice(at, 0, { name: 'inter neu', pose: clone(fs[at].pose), ref: null });
+  frameIdx = at + 1;
+  save(); refreshEditor();
+};
+$('delInter').onclick = () => {
+  if (!currentFrame().inter) return;
+  current.inters.splice(frameIdx - 1, 1);
+  frameIdx -= 1;
+  save(); refreshEditor();
+};
+$('piecesTxt').oninput = e => {
+  try {
+    const ps = JSON.parse(e.target.value);
+    validatePieces(ps);
+    current.pieces = ps;
+    $('piecesErr').textContent = '';
+    save();
+  } catch (err) { $('piecesErr').textContent = err.message; }
+};
+
+function editKey(e) {
+  if (!selRole) return;
+  const p = currentFrame().pose[selRole];
+  while (p.length < 4) p.push(0);
+  const k = e.shiftKey ? 3 : 1;
+  const act = {
+    KeyQ: () => { p[2] += 5 * k; }, KeyE: () => { p[2] -= 5 * k; },
+    KeyR: () => { p[3] = r2(p[3] + 0.1); }, KeyF: () => { p[3] = r2(p[3] - 0.1); },
+    ArrowLeft: () => { p[0] = r2(p[0] - 0.1 * k); }, ArrowRight: () => { p[0] = r2(p[0] + 0.1 * k); },
+    ArrowUp: () => { p[1] = r2(p[1] + 0.1 * k); }, ArrowDown: () => { p[1] = r2(p[1] - 0.1 * k); },
+  }[e.code];
+  if (!act) return;
+  e.preventDefault();
+  act(); refreshTable(); save();
+}
+
+const raycaster = new THREE.Raycaster(), ndc = new THREE.Vector2();
+const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hitPt = new THREE.Vector3(), dragOff = new THREE.Vector3();
+function castRay(e) {
+  const r = canvas.getBoundingClientRect();
+  ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  raycaster.setFromCamera(ndc, camera);
+}
+// Capture-Phase, damit OrbitControls beim Ziehen eines Springers nicht mitdreht
+window.addEventListener('pointerdown', e => {
+  if (!editing || e.target !== canvas || e.button !== 0) return;
+  castRay(e);
+  const hits = raycaster.intersectObjects(ROLES.map(r => flyers[r].userData.body), true);
+  if (!hits.length) return;
+  let o = hits[0].object;
+  while (!o.userData.role) o = o.parent;
+  select(o.userData.role);
+  e.stopPropagation();
+  const f = flyers[selRole];
+  dragPlane.constant = -f.position.y;
+  if (!raycaster.ray.intersectPlane(dragPlane, hitPt)) return;
+  dragOff.copy(f.position).sub(hitPt);
+  dragging = true;
+}, { capture: true });
+window.addEventListener('pointermove', e => {
+  if (!dragging) return;
+  castRay(e);
+  if (!raycaster.ray.intersectPlane(dragPlane, hitPt)) return;
+  hitPt.add(dragOff);
+  const p = currentFrame().pose[selRole];
+  p[0] = r2(hitPt.x / SCALE);
+  p[1] = r2(-hitPt.z / SCALE);
+  refreshTable();
+});
+window.addEventListener('pointerup', () => { if (dragging) { dragging = false; save(); } });
+
+$('exportBtn').onclick = () => {
+  const json = JSON.stringify(DATA, (k, v) => (typeof v === 'number' ? r2(v) : v), 1)
+    .replace(/\[\s+([^\[\]{}]*?)\s+\]/g, (_, inner) => `[${inner.replace(/\s+/g, ' ')}]`);
+  const text = '// Exportiert aus dem 4-Way-FS-Editor. Pose: [x, y, Kopfrichtung°, Höhe]\n' +
+    `window.FS_DATA = ${json};\n`;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'text/javascript' }));
+  a.download = 'formations.js';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+$('importBtn').onclick = () => $('importFile').click();
+$('importFile').onchange = async e => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text.replace(/^[\s\S]*?window\.FS_DATA\s*=\s*/, '').replace(/;\s*$/, ''));
+    validateData(data);
+    assignRefs(data);
+    DATA = data;
+    save(); populateSelect(); load(items[0]); frameIdx = 0;
+    if (editing) refreshEditor();
+  } catch (err) {
+    alert('Import fehlgeschlagen (nur exportierte formations.js oder JSON): ' + err.message);
+  }
+};
+$('resetBtn').onclick = () => {
+  if (!confirm('Alle lokalen Änderungen verwerfen und formations.js neu laden?')) return;
+  localStorage.removeItem(STORE_KEY);
+  DATA = clone(window.FS_DATA);
+  assignRefs(DATA);
+  fromStorage = false;
+  populateSelect(); load(items[0]); frameIdx = 0;
+  if (editing) refreshEditor();
+  updateStoreInfo();
+};
+
+// ---------- Referenzbilder auf der Bildebene ----------
+const REF_SETTINGS = 'fs4way-ref-v2';
+try {
+  const s = JSON.parse(localStorage.getItem(REF_SETTINGS) ?? '{}');
+  for (const k of ['refOn', 'refOpacity', 'refSize']) {
+    if (s[k] === undefined) continue;
+    if ($(k).type === 'checkbox') $(k).checked = s[k]; else $(k).value = s[k];
+  }
+} catch { /* Standardwerte */ }
+for (const k of ['refOn', 'refOpacity', 'refSize']) {
+  $(k).addEventListener('input', () => localStorage.setItem(REF_SETTINGS, JSON.stringify({
+    refOn: $('refOn').checked, refOpacity: $('refOpacity').value, refSize: $('refSize').value,
+  })));
+}
+
+const texLoader = new THREE.TextureLoader(), texCache = new Map();
+function refTexture(key) {
+  const src = key && window.FS_REFS?.[key];
+  if (!src) return null;
+  if (!texCache.has(key)) {
+    const tex = texLoader.load(src);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    texCache.set(key, tex);
+  }
+  return texCache.get(key);
+}
+// Knapp unter den Springern, damit die Draufsicht kaum perspektivisch verzerrt
+const REF_Y = -0.35;
+const makeRefPlane = order => {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
+    new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+  m.rotation.x = -Math.PI / 2;
+  m.position.y = REF_Y;
+  m.renderOrder = order;
+  m.visible = false;
+  scene.add(m);
+  return m;
+};
+const refA = makeRefPlane(1), refB = makeRefPlane(2);
+
+function setRef(mesh, key, opacity) {
+  const tex = refTexture(key);
+  mesh.visible = !!tex && opacity > 0.001;
+  if (!mesh.visible) return;
+  if (mesh.material.map !== tex) { mesh.material.map = tex; mesh.material.needsUpdate = true; }
+  mesh.material.opacity = opacity;
+  const img = tex.image, s = (window.FS_REF_SIZES?.[key] ?? 11) * parseFloat($('refSize').value);
+  mesh.scale.set(s, img?.width ? (s * img.height) / img.width : s, 1);
+}
+
+// Erste Segmenthälfte: altes Bild ausblenden, zweite Hälfte: neues einblenden
+function showRefs(a, b, t) {
+  const on = $('refOn').checked, op = parseFloat($('refOpacity').value);
+  setRef(refA, on ? a : null, op * Math.max(0, 1 - 2 * t));
+  setRef(refB, on ? b : null, op * Math.max(0, 2 * t - 1));
+}
+
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+resize();
+
+setCam('persp');
+load(items[0]);
+const clock = new THREE.Clock();
+renderer.setAnimationLoop(() => {
+  const dt = clock.getDelta() * parseFloat(document.getElementById('speed').value);
+  if (editing) { applyPose(currentFrame().pose); showRefs(currentFrame().ref, null, 0); }
+  else update(dt);
+  controls.update();
+  renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>
