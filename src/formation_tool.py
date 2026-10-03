@@ -56,29 +56,25 @@ def project_3d_point(
     x: float, y: float, z: float,
     yaw: float, pitch: float, zoom: float,
     pan_x: float, pan_y: float,
-    cx: float, cy: float, fov: float = 650.0
+    cx: float, cy: float, fov: float = 650.0, cam_dist: float = 450.0
 ) -> Tuple[float, float, float]:
-    """Projects 3D world coordinate (inches) into screen 2D space."""
-    # Rotate around World Z (Yaw)
+    """Projects 3D world coordinate (inches) into screen 2D space using spherical camera model."""
+    # Rotate around World Z (Yaw / Azimuth)
     cos_y, sin_y = math.cos(yaw), math.sin(yaw)
     x1 = x * cos_y - y * sin_y
     y1 = x * sin_y + y * cos_y
     z1 = z
 
-    # Rotate around Camera X (Pitch)
-    cos_p, sin_p = math.cos(pitch), math.sin(pitch)
-    y2 = y1 * cos_p - z1 * sin_p
-    z2 = y1 * sin_p + z1 * cos_p
+    # Camera elevation angle (pitch: pi/2 = overhead top-down, ~0.95 = 3D perspective)
+    sin_p, cos_p = math.sin(pitch), math.cos(pitch)
+    cam_x = x1
+    cam_y = y1 * sin_p + z1 * cos_p
+    depth = cam_dist + y1 * cos_p - z1 * sin_p
 
-    # Perspective projection
-    cam_dist = 850.0 / zoom + z2
-    if cam_dist < 40.0:
-        cam_dist = 40.0
-    scale = fov / cam_dist
-
-    sx = cx + (x1 + pan_x) * scale
-    sy = cy - (y2 + pan_y) * scale
-    return sx, sy, z2
+    scale = (fov / max(40.0, depth)) * (zoom / 2.0)
+    sx = cx + (cam_x + pan_x) * scale
+    sy = cy - (cam_y + pan_y) * scale
+    return sx, sy, depth
 
 
 def lerp(a: float, b: float, t: float) -> float:
@@ -240,10 +236,10 @@ class Formation3DWidget(QWidget):
         self.setMinimumSize(450, 400)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
-        # Camera parameters
-        self.yaw: float = 0.0          # Horizontal orbit angle in radians
-        self.pitch: float = 0.85       # Vertical pitch angle (0 = side, ~1.57 = top down)
-        self.zoom: float = 2.2         # Camera zoom factor (scaled for clear flyer visibility)
+        # Camera parameters (Spherical Orbit Camera)
+        self.yaw: float = 0.0          # Horizontal azimuth angle in radians (0 = viewing from South)
+        self.pitch: float = math.pi * 0.5  # Vertical elevation angle (pi/2 = 90° overhead top-down, ~0.95 = 54° perspective)
+        self.zoom: float = 2.0         # Camera zoom factor
         self.pan_x: float = 0.0        # Camera pan X offset
         self.pan_y: float = 0.0        # Camera pan Y offset
 
@@ -311,12 +307,12 @@ class Formation3DWidget(QWidget):
         """Resets camera view to standard top-down or 3D perspective."""
         if top_down:
             self.yaw = 0.0
-            self.pitch = 1.55  # Near 90° straight down
-            self.zoom = 2.2
+            self.pitch = math.pi * 0.5  # Exactly 90° straight down from above (true 2D formation diagram)
+            self.zoom = 2.0
         else:
-            self.yaw = 0.25
-            self.pitch = 0.75  # ~43° perspective
-            self.zoom = 2.2
+            self.yaw = 0.25             # ~14° slight orbital azimuth
+            self.pitch = 0.95           # ~54° natural 3D perspective elevation
+            self.zoom = 2.0
         self.pan_x = 0.0
         self.pan_y = 0.0
         self.update()
@@ -372,17 +368,17 @@ class Formation3DWidget(QWidget):
         self.last_mouse_pos = event.position()
 
         if self.mouse_button_down == Qt.MouseButton.LeftButton:
-            # Orbit Camera
+            # Orbit Camera (azimuth and elevation)
             self.yaw += dx * 0.008
-            self.pitch += dy * 0.008
-            # Constrain pitch to avoid flipping over
-            self.pitch = max(0.05, min(math.pi * 0.49, self.pitch))
+            self.pitch -= dy * 0.008
+            # Constrain elevation between 10° and 90° straight down
+            self.pitch = max(0.15, min(math.pi * 0.5, self.pitch))
             self.update()
 
         elif self.mouse_button_down == Qt.MouseButton.RightButton:
             # Zoom Camera
             self.zoom += dy * 0.005
-            self.zoom = max(0.3, min(3.0, self.zoom))
+            self.zoom = max(0.3, min(3.5, self.zoom))
             self.update()
 
         elif self.mouse_button_down == Qt.MouseButton.MiddleButton:
@@ -398,13 +394,13 @@ class Formation3DWidget(QWidget):
     def wheelEvent(self, event):
         delta = event.angleDelta().y()
         zoom_factor = 1.1 if delta > 0 else 0.9
-        self.zoom = max(0.3, min(3.0, self.zoom * zoom_factor))
+        self.zoom = max(0.3, min(3.5, self.zoom * zoom_factor))
         self.update()
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_V:
-            # Toggle between Top-Down (Coach View) and 3D Perspective
-            if abs(self.pitch - 1.55) < 0.15:
+            # Toggle between Top-Down (Coach View, 90°) and 3D Perspective (54°)
+            if abs(self.pitch - math.pi * 0.5) < 0.12:
                 self.reset_camera(top_down=False)
             else:
                 self.reset_camera(top_down=True)
@@ -561,45 +557,37 @@ class Formation3DWidget(QWidget):
         sx1, sy1, _ = project_3d_point(pt.x, pt.y, pt.z, self.yaw, self.pitch, self.zoom, self.pan_x, self.pan_y, cx, cy)
         sx2, sy2, _ = project_3d_point(tl.x, tl.y, tl.z, self.yaw, self.pitch, self.zoom, self.pan_x, self.pan_y, cx, cy)
 
-        pen = QPen(QColor(236, 72, 153, 160), 2.0, Qt.PenStyle.DashDotLine)
+        pen = QPen(QColor(236, 72, 153, 90), 1.2, Qt.PenStyle.DashDotLine)
         painter.setPen(pen)
         painter.drawLine(QPointF(sx1, sy1), QPointF(sx2, sy2))
-
-        # Axis label
-        mx = (sx1 + sx2) / 2.0
-        my = (sy1 + sy2) / 2.0
-        painter.setFont(QFont("Segoe UI", 8, QFont.Weight.DemiBold))
-        painter.setPen(QColor(244, 114, 182, 200))
-        painter.drawText(QRectF(mx - 60, my - 16, 120, 16), Qt.AlignmentFlag.AlignCenter, "Point-Tail Axis")
         painter.restore()
 
     def _draw_grip_links(self, painter: QPainter, states: Dict[str, Flyer3DState], cx: float, cy: float):
-        """Renders glowing magnetic grip vectors between touching teammates."""
+        """Renders subtle magnetic grip lock indicators at contact points without obscuring bodies."""
         if not self.current_formation:
             return
 
+        # Do not render grips when pieces are in active mid-transition
+        if self.current_formation.is_block and (0.15 < self.current_phase < 1.85):
+            return
+
         painter.save()
-        # Draw links based on proximity (< 38 inches)
         slots = list(states.keys())
         for i in range(len(slots)):
             for j in range(i + 1, len(slots)):
                 s_a = states[slots[i]]
                 s_b = states[slots[j]]
                 dist = math.hypot(s_a.x - s_b.x, s_a.y - s_b.y)
-                
-                # Check vertical distance too
                 v_dist = abs(s_a.z - s_b.z)
-                if dist < 42.0 and v_dist < 15.0:
-                    # Valid grip proximity
-                    sx1, sy1, _ = project_3d_point(s_a.x, s_a.y, s_a.z, self.yaw, self.pitch, self.zoom, self.pan_x, self.pan_y, cx, cy)
-                    sx2, sy2, _ = project_3d_point(s_b.x, s_b.y, s_b.z, self.yaw, self.pitch, self.zoom, self.pan_x, self.pan_y, cx, cy)
-
-                    # Glow effect
-                    painter.setPen(QPen(QColor(56, 189, 248, 80), 5.0))
-                    painter.drawLine(QPointF(sx1, sy1), QPointF(sx2, sy2))
-                    # Core solid connection
-                    painter.setPen(QPen(QColor(224, 242, 254, 220), 2.0))
-                    painter.drawLine(QPointF(sx1, sy1), QPointF(sx2, sy2))
+                if dist < 48.0 and v_dist < 15.0:
+                    mx = (s_a.x + s_b.x) / 2.0
+                    my = (s_a.y + s_b.y) / 2.0
+                    mz = (s_a.z + s_b.z) / 2.0
+                    smx, smy, _ = project_3d_point(mx, my, mz, self.yaw, self.pitch, self.zoom, self.pan_x, self.pan_y, cx, cy)
+                    # Subtle glowing magnetic lock ring
+                    painter.setPen(QPen(QColor(56, 189, 248, 140), 1.5, Qt.PenStyle.DotLine))
+                    painter.setBrush(Qt.BrushStyle.NoBrush)
+                    painter.drawEllipse(QPointF(smx, smy), 6.0, 6.0)
 
         painter.restore()
 
@@ -1000,11 +988,11 @@ class Formation3DWidget(QWidget):
             painter.setPen(QColor(s_col))
             painter.drawText(QRectF(sx, h - 42, slot_w, 32), Qt.AlignmentFlag.AlignCenter, txt)
 
-        # 4. View Shortcut Hint (Bottom Left)
-        hint_rect = QRectF(15, h - 38, 200, 24)
+        # 4. View Shortcut Hint (Top Left beneath formation badge)
+        hint_rect = QRectF(18, 80, 260, 20)
         painter.setFont(QFont("Segoe UI", 8))
         painter.setPen(QColor("#64748b"))
-        painter.drawText(hint_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, "[V] Draufsicht/3D • [Space] Play")
+        painter.drawText(hint_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, "💡 [V] Draufsicht/3D  •  [Leertaste] Play/Pause")
 
         painter.restore()
 
@@ -1695,6 +1683,16 @@ class FormationExplorerWindow(QMainWindow):
         self.viewport_3d.show_compass_grid = checked
         self.viewport_3d.update()
 
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_F11:
+            if self.isFullScreen():
+                self.showMaximized()
+            else:
+                self.showFullScreen()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
     def _launch_scoring_tool(self):
         """Launches scoring.py if present."""
         scoring_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scoring.py")
@@ -1719,7 +1717,7 @@ def main():
         init_code = sys.argv[1].strip().upper()
 
     window = FormationExplorerWindow(initial_code=init_code)
-    window.show()
+    window.showMaximized()
     sys.exit(app.exec())
 
 

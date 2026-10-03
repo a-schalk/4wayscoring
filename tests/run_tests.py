@@ -151,10 +151,14 @@ def test_gui_and_interactions():
     w.session.points = [p1, p2]
     w._update_table_and_stats()
 
-    # Selection mode
+    # Selection mode & Geometry Invariance
+    min_w_unselected = w.selection_bar.minimumSizeHint().width()
     w._on_timeline_point_clicked(1)
     assert w.selected_point_index == 1
-    assert not w.btn_set_sel_key.isHidden()
+    assert w.btn_set_sel_key.isEnabled()
+    # Size hint must remain completely invariant to prevent window/dialog resizing
+    min_w_selected = w.selection_bar.minimumSizeHint().width()
+    assert min_w_selected == min_w_unselected
 
     w._set_selected_point_key_to_current(21.5)
     assert p2.time_key == 21.5
@@ -167,7 +171,12 @@ def test_gui_and_interactions():
 
     w._clear_point_selection()
     assert w.selected_point_index is None
-    assert w.btn_set_sel_key.isHidden()
+    assert not w.btn_set_sel_key.isEnabled()
+    assert w.selection_bar.minimumSizeHint().width() == min_w_unselected
+
+    # Test Fullscreen Toggle
+    w.toggle_fullscreen()
+    w.toggle_fullscreen()
 
     # Apply draw change to existing points
     w.edit_draw.setText("B - 1 - C")

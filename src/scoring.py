@@ -41,7 +41,8 @@ from PyQt6.QtWidgets import (
     QFileDialog, QHeaderView, QSplitter, QButtonGroup, QRadioButton,
     QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QProgressBar,
     QMessageBox, QDialog, QTextEdit, QPlainTextEdit, QFrame, QGroupBox, QToolTip,
-    QCheckBox, QAbstractItemView, QMenu, QListWidget, QListWidgetItem, QTabWidget
+    QCheckBox, QAbstractItemView, QMenu, QListWidget, QListWidgetItem, QTabWidget,
+    QSizePolicy
 )
 
 try:
@@ -1559,6 +1560,12 @@ class DebriefMainWindow(QMainWindow):
         btn_settings.clicked.connect(self._open_video_paths_dialog)
         header_layout.addWidget(btn_settings)
 
+        self.btn_fullscreen = QPushButton("🗗 Fenster [F11]")
+        self.btn_fullscreen.setToolTip("Vollbildmodus umschalten (Taste F11)")
+        self.btn_fullscreen.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.btn_fullscreen.clicked.connect(self.toggle_fullscreen)
+        header_layout.addWidget(self.btn_fullscreen)
+
         main_layout.addWidget(header_bar)
 
         # Sequence Chips Display Bar
@@ -1573,6 +1580,7 @@ class DebriefMainWindow(QMainWindow):
         # 2. MAIN SPLITTER: Left (Video & Timeline) vs Right (Scoring & Stats)
         # -------------------------------------------------------------
         self.splitter = QSplitter(Qt.Orientation.Horizontal, self)
+        self.splitter.setChildrenCollapsible(False)
         self.splitter.splitterMoved.connect(lambda *args: self.sync_overlays())
         main_layout.addWidget(self.splitter, stretch=1)
 
@@ -1923,52 +1931,65 @@ class DebriefMainWindow(QMainWindow):
         table_header_layout.addWidget(btn_clear_points)
         table_card_layout.addLayout(table_header_layout)
 
-        # Selected Point Quick-Edit Toolbar
+        # Selected Point Quick-Edit Toolbar (Static 2-row layout prevents size/geometry jumps)
         self.selection_bar = QFrame(card_table)
         self.selection_bar.setObjectName("SelectionBar")
         self.selection_bar.setStyleSheet(
             "background-color: #27272a; border: 1px solid #3f3f46; border-radius: 4px; padding: 2px;"
         )
-        sel_layout = QHBoxLayout(self.selection_bar)
+        self.selection_bar.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        sel_layout = QVBoxLayout(self.selection_bar)
         sel_layout.setContentsMargins(6, 4, 6, 4)
-        sel_layout.setSpacing(6)
+        sel_layout.setSpacing(4)
 
-        self.lbl_selected_point_info = QLabel("<i>Kein Punkt ausgewählt (Nächster Punkt wird gewertet)</i>")
+        self.lbl_selected_point_info = QLabel("<i>Kein Punkt ausgewählt &ndash; Nächster Punkt wird gewertet</i>")
         self.lbl_selected_point_info.setStyleSheet("color: #a1a1aa; font-size: 11px;")
-        sel_layout.addWidget(self.lbl_selected_point_info, 1)
+        self.lbl_selected_point_info.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        sel_layout.addWidget(self.lbl_selected_point_info)
 
-        self.btn_set_sel_complete = QPushButton("⏱️ Fertig = Video (F)")
+        sel_btns_layout = QHBoxLayout()
+        sel_btns_layout.setContentsMargins(0, 0, 0, 0)
+        sel_btns_layout.setSpacing(4)
+
+        disabled_btn_style = "background-color: #1f2937; color: #4b5563; font-size: 11px; padding: 2px 6px; border: 1px solid #374151; border-radius: 3px;"
+
+        self.btn_set_sel_complete = QPushButton("⏱️ Fertig (F)")
         self.btn_set_sel_complete.setFixedHeight(24)
-        self.btn_set_sel_complete.setStyleSheet("background-color: #0284c7; color: white; font-size: 11px; padding: 2px 6px; font-weight: bold;")
+        self.btn_set_sel_complete.setStyleSheet(disabled_btn_style)
+        self.btn_set_sel_complete.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_set_sel_complete.setToolTip("Fertig-Zeit des ausgewählten Punkts auf die aktuelle Videozeit setzen (Taste 'F')")
         self.btn_set_sel_complete.clicked.connect(lambda: self._set_selected_point_complete_to_current())
-        self.btn_set_sel_complete.hide()
-        sel_layout.addWidget(self.btn_set_sel_complete)
+        self.btn_set_sel_complete.setEnabled(False)
+        sel_btns_layout.addWidget(self.btn_set_sel_complete)
 
-        self.btn_set_sel_key = QPushButton("🔑 Key = Video (K)")
+        self.btn_set_sel_key = QPushButton("🔑 Key (K)")
         self.btn_set_sel_key.setFixedHeight(24)
-        self.btn_set_sel_key.setStyleSheet("background-color: #d97706; color: white; font-size: 11px; padding: 2px 6px; font-weight: bold;")
+        self.btn_set_sel_key.setStyleSheet(disabled_btn_style)
+        self.btn_set_sel_key.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_set_sel_key.setToolTip("Key-Zeit des ausgewählten Punkts auf die aktuelle Videozeit setzen (Taste 'K')")
         self.btn_set_sel_key.clicked.connect(lambda: self._set_selected_point_key_to_current())
-        self.btn_set_sel_key.hide()
-        sel_layout.addWidget(self.btn_set_sel_key)
+        self.btn_set_sel_key.setEnabled(False)
+        sel_btns_layout.addWidget(self.btn_set_sel_key)
 
-        self.btn_toggle_sel_status = QPushButton("✓/✗ Status (S/B)")
+        self.btn_toggle_sel_status = QPushButton("✓/✗ (S/B)")
         self.btn_toggle_sel_status.setFixedHeight(24)
-        self.btn_toggle_sel_status.setStyleSheet("background-color: #4b5563; color: white; font-size: 11px; padding: 2px 6px; font-weight: bold;")
+        self.btn_toggle_sel_status.setStyleSheet(disabled_btn_style)
+        self.btn_toggle_sel_status.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_toggle_sel_status.setToolTip("Status des ausgewählten Punkts zwischen SCORE und BUST umschalten (Taste 'S' oder 'B')")
         self.btn_toggle_sel_status.clicked.connect(self._toggle_selected_point_status)
-        self.btn_toggle_sel_status.hide()
-        sel_layout.addWidget(self.btn_toggle_sel_status)
+        self.btn_toggle_sel_status.setEnabled(False)
+        sel_btns_layout.addWidget(self.btn_toggle_sel_status)
 
-        self.btn_clear_selection = QPushButton("✕ Abwählen (Esc)")
+        self.btn_clear_selection = QPushButton("✕ Esc")
         self.btn_clear_selection.setFixedHeight(24)
-        self.btn_clear_selection.setStyleSheet("font-size: 11px; padding: 2px 6px;")
+        self.btn_clear_selection.setStyleSheet(disabled_btn_style)
+        self.btn_clear_selection.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_clear_selection.setToolTip("Auswahl aufheben und zurück zu 'Neuer Punkt' (Taste 'Esc')")
         self.btn_clear_selection.clicked.connect(self._clear_point_selection)
-        self.btn_clear_selection.hide()
-        sel_layout.addWidget(self.btn_clear_selection)
+        self.btn_clear_selection.setEnabled(False)
+        sel_btns_layout.addWidget(self.btn_clear_selection)
 
+        sel_layout.addLayout(sel_btns_layout)
         table_card_layout.addWidget(self.selection_bar)
 
         self.points_table = QTableWidget(self)
@@ -1976,8 +1997,24 @@ class DebriefMainWindow(QMainWindow):
         self.points_table.setHorizontalHeaderLabels([
             "#", "Form.", "Status", "Fertig", "Key", "Hold (s)", "Trans (s)", "Notiz"
         ])
-        self.points_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-        self.points_table.horizontalHeader().setSectionResizeMode(7, QHeaderView.ResizeMode.Stretch)
+        header = self.points_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Interactive)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Interactive)
+        header.setSectionResizeMode(4, QHeaderView.ResizeMode.Interactive)
+        header.setSectionResizeMode(5, QHeaderView.ResizeMode.Interactive)
+        header.setSectionResizeMode(6, QHeaderView.ResizeMode.Interactive)
+        header.setSectionResizeMode(7, QHeaderView.ResizeMode.Stretch)
+
+        self.points_table.setColumnWidth(0, 32)
+        self.points_table.setColumnWidth(1, 60)
+        self.points_table.setColumnWidth(2, 115)
+        self.points_table.setColumnWidth(3, 68)
+        self.points_table.setColumnWidth(4, 68)
+        self.points_table.setColumnWidth(5, 68)
+        self.points_table.setColumnWidth(6, 68)
+
         self.points_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.points_table.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked)
         self.points_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -2012,6 +2049,8 @@ class DebriefMainWindow(QMainWindow):
 
         # Splitter Anfangsgrößen
         self.splitter.setSizes([1080, 520])
+        self.splitter.setStretchFactor(0, 1)
+        self.splitter.setStretchFactor(1, 0)
 
         # Fokus-Richtlinien optimieren: Buttons und Steuerelemente sollen keinen Tastaturfokus
         # festhalten, damit Shortcuts wie Leertaste, Pfeile, S, B, F, K jederzeit global funktionieren.
@@ -2166,8 +2205,20 @@ class DebriefMainWindow(QMainWindow):
                     self.timer_progress.setValue(1000)
 
     # -----------------------------------------------------------------
-    # Synchronisation des Overlays
+    # Synchronisation des Overlays & Vollbildmodus
     # -----------------------------------------------------------------
+    def toggle_fullscreen(self):
+        """Schaltet zwischen echtem Fullscreen und maximiertem Fenstermodus um."""
+        if self.isFullScreen():
+            self.showMaximized()
+            if hasattr(self, 'btn_fullscreen'):
+                self.btn_fullscreen.setText("⛶ Vollbild [F11]")
+        else:
+            self.showFullScreen()
+            if hasattr(self, 'btn_fullscreen'):
+                self.btn_fullscreen.setText("🗗 Fenster [F11]")
+        self.sync_overlays()
+
     def sync_overlays(self):
         if hasattr(self, 'container1'):
             self.container1.sync_overlay()
@@ -2355,6 +2406,11 @@ class DebriefMainWindow(QMainWindow):
             self._show_shortcuts_help()
             return True
 
+        # 13. Vollbild umschalten: F11
+        elif key == Qt.Key.Key_F11:
+            self.toggle_fullscreen()
+            return True
+
         return False
 
     def _show_shortcuts_help(self):
@@ -2478,6 +2534,7 @@ class DebriefMainWindow(QMainWindow):
             ("Strg + O", "Session laden (.json)"),
             ("Strg + E", "Debriefing Report exportieren (.md)"),
             ("F1", "Diese Hilfe & Dokumentation anzeigen"),
+            ("F11", "Vollbildmodus (Fullscreen) ein- / ausschalten"),
         ]
 
         shortcuts_table.setRowCount(len(items))
@@ -3071,13 +3128,13 @@ class DebriefMainWindow(QMainWindow):
     # Formation Finished, Key Given & Point Judging
     # -----------------------------------------------------------------
     def _update_selection_controls(self):
-        """Aktualisiert die Aktionsleiste für den ausgewählten Punkt."""
+        """Aktualisiert die Aktionsleiste für den ausgewählten Punkt (ohne Geometrie-Sprünge)."""
         has_sel = (self.selected_point_index is not None and 0 <= self.selected_point_index < len(self.session.points))
         if hasattr(self, 'btn_set_sel_complete'):
-            self.btn_set_sel_complete.setVisible(has_sel)
-            self.btn_set_sel_key.setVisible(has_sel)
-            self.btn_toggle_sel_status.setVisible(has_sel)
-            self.btn_clear_selection.setVisible(has_sel)
+            self.btn_set_sel_complete.setEnabled(has_sel)
+            self.btn_set_sel_key.setEnabled(has_sel)
+            self.btn_toggle_sel_status.setEnabled(has_sel)
+            self.btn_clear_selection.setEnabled(has_sel)
 
             if has_sel:
                 pt = self.session.points[self.selected_point_index]
@@ -3089,6 +3146,18 @@ class DebriefMainWindow(QMainWindow):
                     f"Fertig: {format_seconds(pt.time_complete)} | Key: {format_seconds(pt.time_key)}"
                 )
                 self.lbl_selected_point_info.setStyleSheet("color: #38bdf8; font-size: 11px;")
+                self.btn_set_sel_complete.setStyleSheet(
+                    "background-color: #0284c7; color: white; font-size: 11px; padding: 2px 6px; font-weight: bold; border-radius: 3px;"
+                )
+                self.btn_set_sel_key.setStyleSheet(
+                    "background-color: #d97706; color: white; font-size: 11px; padding: 2px 6px; font-weight: bold; border-radius: 3px;"
+                )
+                self.btn_toggle_sel_status.setStyleSheet(
+                    "background-color: #4b5563; color: white; font-size: 11px; padding: 2px 6px; font-weight: bold; border-radius: 3px;"
+                )
+                self.btn_clear_selection.setStyleSheet(
+                    "background-color: #27272a; color: #f43f5e; font-size: 11px; padding: 2px 6px; border: 1px solid #475569; border-radius: 3px;"
+                )
             else:
                 self.selection_bar.setStyleSheet(
                     "background-color: #27272a; border: 1px solid #3f3f46; border-radius: 4px; padding: 2px;"
@@ -3099,6 +3168,11 @@ class DebriefMainWindow(QMainWindow):
                     f"<i>Kein Punkt ausgewählt &ndash; Nächster Punkt #{pt_num} ({next_f}) wird bei S/B gewertet</i>"
                 )
                 self.lbl_selected_point_info.setStyleSheet("color: #a1a1aa; font-size: 11px;")
+                disabled_style = "background-color: #1f2937; color: #4b5563; font-size: 11px; padding: 2px 6px; border: 1px solid #374151; border-radius: 3px;"
+                self.btn_set_sel_complete.setStyleSheet(disabled_style)
+                self.btn_set_sel_key.setStyleSheet(disabled_style)
+                self.btn_toggle_sel_status.setStyleSheet(disabled_style)
+                self.btn_clear_selection.setStyleSheet(disabled_style)
 
     def _set_selected_point_complete_to_current(self, t: Optional[float] = None):
         if self.selected_point_index is None or not (0 <= self.selected_point_index < len(self.session.points)):
@@ -3759,7 +3833,7 @@ def main():
     except Exception:
         pass
     window = DebriefMainWindow()
-    window.show()
+    window.showFullScreen()
     sys.exit(app.exec())
 
 
