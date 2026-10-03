@@ -56,6 +56,11 @@
    - **Ursachenanalyse:** Dynamisches Ein-/Ausblenden (`setVisible(has_sel)`) von 4 Aktionsbuttons in einer horizontalen Leiste (`selection_bar`) bei Punkt-Fokus ließ den Mindestplatzbedarf von 380px schlagartig auf >830px schnellen. Da die App nicht maximiert war, erzwang das Qt-Layout beim Window-Manager eine Fenster-Vergrößerung.
    - **Geometrie-Invarianz:** `selection_bar` auf statisches 2-Zeilen-Layout umgestellt. Buttons bleiben permanent im Layout und werden sauber per `setEnabled(has_sel)` aktiviert/deaktiviert. Mindestbreite bleibt exakt konstant (`min_w = 265px` vorher wie nachher). Tabellenspalten-Breiten fixiert und Splitter gegen Kollabieren geschützt.
    - **Fullscreen-Standard:** Hauptfenster startet jetzt standardmäßig im Fullscreen (`window.showFullScreen()`). Taste `[F11]` und Header-Button `🗗 Fenster [F11]` / `⛶ Vollbild [F11]` erlauben nahtloses Umschalten zwischen echtem Vollbild und maximiertem Modus. 3D-Explorer startet maximiert mit `[F11]`-Unterstützung.
+11. **GitHub Pages Deployment (3D Formation & Block Web App):**
+   - Web-App (`4way/index.html`, `4way/formations.js`, `4way/refs.js`) als dedizierter `gh-pages`-Branch mit `.nojekyll` und `README.md` nach GitHub (`origin/gh-pages`) gepusht.
+   - `.gitignore` angepasst, um Web-Dateien in `main` zu versionieren, während Scratch-Bilder/PDFs ignoriert bleiben.
+   - GitHub Actions Workflow (`.github/workflows/deploy-pages.yml`) hinzugefügt für automatische Pages-Deployments bei Änderungen auf `main`.
+   - Live-URL: `https://a-schalk.github.io/4wayscoring/`.
 
 ---
 

@@ -44,5 +44,8 @@ debriefs/*
 *_report.md
 
 # Scratch and reference working folders
-4way/
+4way/*
+!4way/index.html
+!4way/formations.js
+!4way/refs.js
 
