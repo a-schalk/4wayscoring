@@ -7,19 +7,58 @@
   html, body { margin: 0; height: 100%; overflow: hidden; font-family: system-ui, sans-serif; }
   #c { display: block; width: 100%; height: 100%; }
   #panel {
-    position: absolute; top: 12px; left: 12px; width: 300px; padding: 12px 14px;
-    background: rgba(255,255,255,0.9); border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-    font-size: 14px;
+    position: absolute; top: 12px; left: 12px; width: 350px; max-height: calc(100% - 24px); overflow-y: auto;
+    padding: 12px 14px; background: rgba(255,255,255,0.94); border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.22);
+    font-size: 13.5px; box-sizing: border-box;
   }
   #panel h1 { font-size: 17px; margin: 0 0 8px; }
   #panel select, #panel input[type=range] { width: 100%; }
-  #panel button { margin: 4px 4px 4px 0; padding: 4px 10px; cursor: pointer; }
-  #phase { font-weight: 600; margin: 6px 0; min-height: 1.2em; }
-  #info { font-size: 13px; margin: 6px 0; }
+  #panel button { margin: 3px 2px; padding: 4px 8px; cursor: pointer; border-radius: 4px; border: 1px solid #cbd5e1; background: #fff; font-size: 12px; }
+  #panel button:hover { background: #f1f5f9; }
+  #phase { font-weight: 600; margin: 6px 0; min-height: 1.2em; color: #1e293b; }
+  #info { font-size: 12.5px; margin: 6px 0; }
   #info ul { margin: 4px 0; padding-left: 18px; }
   .legend span { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
   .legend div { margin: 2px 0; }
   .hint { font-size: 12px; color: #555; margin: 8px 0 0; }
+
+  /* Mode Tabs */
+  .mode-tabs { display: flex; gap: 4px; margin-bottom: 8px; background: #e2e8f0; padding: 3px; border-radius: 6px; }
+  .mode-tab { flex: 1; padding: 6px 4px; text-align: center; border: none !important; background: transparent !important; cursor: pointer; border-radius: 4px !important; font-weight: 600; font-size: 12px; color: #475569; }
+  .mode-tab.active { background: #ffffff !important; color: #0f172a !important; box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
+
+  /* Sequenz-Eingabe */
+  .seq-input-group { display: flex; gap: 4px; margin-bottom: 6px; }
+  .seq-input-group input { flex: 1; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 5px; font-size: 13px; font-weight: bold; letter-spacing: 0.5px; text-transform: uppercase; }
+  .seq-input-group button.primary { background: #1e63d6; color: white; border-color: #1a56bb; font-weight: 700; }
+  .seq-input-group button.primary:hover { background: #1850b0; }
+
+  /* Schnellauswahl */
+  .quick-section { margin: 6px 0; }
+  .quick-label { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 3px; display: flex; justify-content: space-between; align-items: center; }
+  .quick-btns { display: flex; flex-wrap: wrap; gap: 3px; max-height: 80px; overflow-y: auto; padding: 4px; border: 1px solid #e2e8f0; border-radius: 5px; background: #f8fafc; }
+  .chip-btn { padding: 2px 5px !important; border: 1px solid #cbd5e1 !important; border-radius: 3px; background: #ffffff !important; font-size: 11px !important; font-weight: 600; cursor: pointer; min-width: 22px; text-align: center; margin: 1px !important; }
+  .chip-btn:hover { background: #e0f2fe !important; border-color: #38bdf8 !important; color: #0284c7; }
+  .chip-btn.block { background: #f1f5f9 !important; }
+
+  /* Sequenz-Kette */
+  .seq-chain { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 8px 0; padding: 6px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; min-height: 28px; }
+  .seq-badge { display: inline-flex; align-items: center; gap: 3px; padding: 3px 7px; border-radius: 4px; background: #ffffff; border: 1px solid #cbd5e1; font-weight: 600; font-size: 12px; cursor: pointer; transition: all 0.15s; }
+  .seq-badge:hover { border-color: #3b82f6; }
+  .seq-badge.active { background: #2563eb; color: #ffffff; border-color: #1d4ed8; box-shadow: 0 0 0 2px rgba(37,99,235,0.25); }
+  .seq-arrow { color: #94a3b8; font-size: 10px; }
+
+  /* Navigation zwischen Schritten */
+  .step-controls { display: flex; gap: 4px; margin: 6px 0; }
+  .step-controls button { flex: 1; padding: 5px !important; font-size: 12px !important; font-weight: 600; }
+
+  /* Wege & Statistiken */
+  .path-stats { margin-top: 8px; padding: 6px 8px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 12px; }
+  .path-stats-title { font-weight: 700; margin-bottom: 4px; color: #334155; display: flex; justify-content: space-between; align-items: center; }
+  .path-row { display: flex; justify-content: space-between; align-items: center; margin: 2px 0; font-size: 11.5px; }
+  .path-role-tag { font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+  .path-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .path-val { font-family: monospace; color: #1e293b; font-weight: 600; }
   #editor {
     position: absolute; top: 12px; right: 12px; width: 330px; max-height: calc(100% - 48px); overflow: auto;
     padding: 12px 14px; background: rgba(255,255,255,0.93); border-radius: 8px;
@@ -48,17 +87,61 @@
 <canvas id="c"></canvas>
 <div id="panel">
   <h1>4-Way FS – 3D</h1>
-  <select id="sel"></select>
+
+  <!-- Modus-Tabs -->
+  <div class="mode-tabs">
+    <button class="mode-tab active" id="tabSeq" type="button">Sprungkombination</button>
+    <button class="mode-tab" id="tabSingle" type="button">Einzelformation</button>
+  </div>
+
+  <!-- Bereich: Sprungkombination -->
+  <div id="seqContainer">
+    <div class="seq-input-group">
+      <input id="seqInput" type="text" placeholder="z. B. A 21 C F oder 1 - J - M - 7" value="A 21 C F">
+      <button class="primary" id="seqApply" title="Sprung laden und animieren">Start</button>
+      <button id="seqRandomDraw" title="Zufällige FAI 4-Way Wettkampfrunde auslosen">🎲 Draw</button>
+      <button id="seqClear" title="Eingabe leeren">✕</button>
+    </div>
+    
+    <div class="quick-section">
+      <div class="quick-label">
+        <span>Schnellauswahl</span>
+        <span style="font-weight:normal; font-size:10px; color:#64748b;">Klick = Hinzufügen</span>
+      </div>
+      <div class="quick-btns" id="quickBtns"></div>
+    </div>
+
+    <div class="seq-chain" id="seqBadges"></div>
+  </div>
+
+  <!-- Bereich: Einzelformation -->
+  <div id="singleContainer" hidden>
+    <select id="sel"></select>
+  </div>
+
   <div id="phase"></div>
+  
+  <div class="step-controls">
+    <button id="prevStep" title="Vorherige Formation">⏮ Vorherige</button>
+    <button id="nextStep" title="Nächste Formation">⏭ Nächste</button>
+  </div>
+
   <input id="scrub" type="range" min="0" max="1000" value="0">
   <div>
     <button id="play">Pause</button>
     <button id="restart">Neustart</button>
     <label><input id="loop" type="checkbox" checked> Loop</label>
   </div>
-  <div><label><input id="pause" type="checkbox"> An Inter-Bildern anhalten</label></div>
+  <div><label><input id="pause" type="checkbox"> An Formationen anhalten</label></div>
   <label>Tempo <input id="speed" type="range" min="0.25" max="2" step="0.05" value="1"></label>
-  <div>
+  
+  <div style="margin-top:6px;">
+    <label><input id="showPaths" type="checkbox" checked> <b>Wege / Trajektorien animieren</b></label>
+  </div>
+  
+  <div id="pathStatsBox" class="path-stats"></div>
+
+  <div style="margin-top:8px;">
     Kamera:
     <button data-cam="top">Oben</button>
     <button data-cam="persp">Schräg</button>
@@ -70,10 +153,10 @@
   <label>Bildgröße <input id="refSize" type="range" min="0.7" max="1.3" step="0.01" value="1"></label>
   <div id="info"></div>
   <div class="legend">
-    <div><span style="background:#e53935"></span>Point</div>
-    <div><span style="background:#43a047"></span>Outside Center</div>
-    <div><span style="background:#1e63d6"></span>Inside Center</div>
-    <div><span style="background:#fdd835"></span>Tail</div>
+    <div><span style="background:#e53935"></span>Point (P)</div>
+    <div><span style="background:#43a047"></span>Outside Center (OC)</div>
+    <div><span style="background:#1e63d6"></span>Inside Center (IC)</div>
+    <div><span style="background:#fdd835"></span>Tail (T)</div>
   </div>
   <p class="hint">Maus: drehen/zoomen · Leertaste: Play/Pause · Pfeil links = Flugrichtung.
     Posen aus den Workbook-Grafiken erkannt, Drehrichtungen teils geschätzt.</p>
@@ -330,9 +413,209 @@ function segPose(plan, i, t) {
   return pose;
 }
 
+// ---------- Wege / Trajektorien (3D Pfade für die 4 Springer) ----------
+const pathGroup = new THREE.Group();
+scene.add(pathGroup);
+
+const pathTubes = {};
+const startDots = {};
+const endArrows = {};
+const tracers = {};
+
+for (const r of ROLES) {
+  const col = ROLE[r].color;
+  // Tube (Pfad)
+  const tubeMat = new THREE.MeshStandardMaterial({
+    color: col, roughness: 0.35, metalness: 0.1, transparent: true, opacity: 0.85
+  });
+  const tubeMesh = new THREE.Mesh(new THREE.BufferGeometry(), tubeMat);
+  tubeMesh.visible = false;
+  pathGroup.add(tubeMesh);
+  pathTubes[r] = tubeMesh;
+
+  // Start-Punkt
+  const dotMat = new THREE.MeshStandardMaterial({ color: col, roughness: 0.3 });
+  const dotMesh = new THREE.Mesh(new THREE.SphereGeometry(0.065, 12, 10), dotMat);
+  dotMesh.visible = false;
+  pathGroup.add(dotMesh);
+  startDots[r] = dotMesh;
+
+  // Ziel-Pfeil
+  const arrowMat = new THREE.MeshStandardMaterial({ color: col, roughness: 0.3 });
+  const arrowMesh = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.22, 12), arrowMat);
+  arrowMesh.visible = false;
+  pathGroup.add(arrowMesh);
+  endArrows[r] = arrowMesh;
+
+  // Animierte Perle (Tracer)
+  const tracerMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff, emissive: col, emissiveIntensity: 0.9, roughness: 0.2
+  });
+  const tracerMesh = new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 10), tracerMat);
+  tracerMesh.visible = false;
+  pathGroup.add(tracerMesh);
+  tracers[r] = tracerMesh;
+}
+
+// Berechnet eine geschwungene 3D-Kurve zwischen Start- und Zielposition mit Zentrums-Ausweichbogen
+function createFlyerCurve(p0, p1, cf0, cf1) {
+  const v0 = new THREE.Vector3(p0[0] * SCALE, (p0[3] || 0) * SCALE * 0.8, -p0[1] * SCALE);
+  const v1 = new THREE.Vector3(p1[0] * SCALE, (p1[3] || 0) * SCALE * 0.8, -p1[1] * SCALE);
+  const mid = v0.clone().add(v1).multiplyScalar(0.5);
+  const cMid = new THREE.Vector3((cf0[0] + cf1[0]) * 0.5 * SCALE, 0, -(cf0[1] + cf1[1]) * 0.5 * SCALE);
+  const out = mid.clone().sub(cMid);
+  out.y = 0;
+  if (out.length() > 0.1) {
+    out.normalize().multiplyScalar(0.42 * SCALE);
+    mid.add(out);
+  }
+  mid.y += 0.08;
+  return new THREE.QuadraticBezierCurve3(v0, mid, v1);
+}
+
+// Plant den Übergang zwischen zwei beliebigen Formationen
+function planTransition(from, to, fromName, toName) {
+  const cf0 = mean(from, ROLES), cf1 = mean(to, ROLES);
+  let maxDist = 0, maxRot = 0;
+  const flyerMoves = {};
+
+  for (const r of ROLES) {
+    const p0 = from[r], p1 = to[r];
+    const dx = p1[0] - p0[0], dy = p1[1] - p0[1];
+    const dist = Math.hypot(dx, dy);
+    const dRot = Math.abs(wrap(p1[2] - p0[2]));
+    maxDist = Math.max(maxDist, dist);
+    maxRot = Math.max(maxRot, dRot);
+    flyerMoves[r] = { p0, p1, dist, dRot };
+  }
+
+  const dur = Math.max(0.9, 0.6 + maxDist * 0.38 + (maxRot / 360) * 0.85);
+
+  const curves = {};
+  for (const r of ROLES) {
+    curves[r] = createFlyerCurve(from[r], to[r], cf0, cf1);
+  }
+
+  return { from, to, fromName, toName, cf0, cf1, dur, maxDist, maxRot, flyerMoves, curves };
+}
+
+// Berechnet die Pose in einem Übergang bei lokalem Fortschritt t
+function transitionPose(plan, t) {
+  const e = ease(t);
+  const bump = Math.sin(Math.PI * e);
+  const { from, to, cf0, cf1 } = plan;
+  const cf = [cf0[0] + (cf1[0] - cf0[0]) * e, cf0[1] + (cf1[1] - cf0[1]) * e];
+  const pose = {};
+
+  for (const r of ROLES) {
+    const p0 = from[r], p1 = to[r];
+    const d = wrap(p1[2] - p0[2]);
+    let x = p0[0] + (p1[0] - p0[0]) * e;
+    let y = p0[1] + (p1[1] - p0[1]) * e;
+    const dx = x - cf[0], dy = y - cf[1];
+    const dist = Math.hypot(dx, dy);
+    if (dist > 0.15) {
+      const sep = 0.45 * bump;
+      x += (dx / dist) * sep;
+      y += (dy / dist) * sep;
+    }
+    const h = p0[2] + d * e;
+    const z0 = p0[3] || 0, z1 = p1[3] || 0;
+    const z = z0 + (z1 - z0) * e + 0.12 * bump;
+    pose[r] = [x, y, h, z];
+  }
+  return pose;
+}
+
+// Kurven für interne Block-Segmente
+function getBlockSegmentCurves(plan, i) {
+  const seg = plan.segs[i];
+  const cf0 = mean(seg.from, ROLES), cf1 = mean(seg.to, ROLES);
+  const curves = {};
+  for (const r of ROLES) {
+    curves[r] = createFlyerCurve(seg.from[r], seg.to[r], cf0, cf1);
+  }
+  return curves;
+}
+
+function updatePaths(curves, localT) {
+  const show = document.getElementById('showPaths')?.checked;
+  if (!show || !curves) {
+    pathGroup.visible = false;
+    return;
+  }
+  pathGroup.visible = true;
+  for (const r of ROLES) {
+    const c = curves[r];
+    if (!c) {
+      pathTubes[r].visible = false;
+      startDots[r].visible = false;
+      endArrows[r].visible = false;
+      tracers[r].visible = false;
+      continue;
+    }
+    pathTubes[r].geometry.dispose();
+    pathTubes[r].geometry = new THREE.TubeGeometry(c, 24, 0.03, 8, false);
+    pathTubes[r].visible = true;
+
+    startDots[r].position.copy(c.v0);
+    startDots[r].visible = true;
+
+    const pEnd = c.getPoint(1);
+    const pPre = c.getPoint(0.92);
+    const dir = pEnd.clone().sub(pPre).normalize();
+    endArrows[r].position.copy(pEnd);
+    endArrows[r].quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+    endArrows[r].visible = true;
+
+    const curPt = c.getPoint(Math.max(0, Math.min(1, localT)));
+    tracers[r].position.copy(curPt);
+    tracers[r].visible = true;
+  }
+}
+
+function renderPathStats(planOrStats) {
+  const box = document.getElementById('pathStatsBox');
+  if (!box) return;
+  const show = document.getElementById('showPaths')?.checked;
+  if (!show || !planOrStats) {
+    box.style.display = 'none';
+    return;
+  }
+  box.style.display = 'block';
+
+  let totalDist = 0;
+  const rows = ROLES.map(r => {
+    let d = 0, rot = 0;
+    if (planOrStats.flyerMoves?.[r]) {
+      d = planOrStats.flyerMoves[r].dist;
+      rot = planOrStats.flyerMoves[r].dRot;
+    } else if (planOrStats.from && planOrStats.to) {
+      const p0 = planOrStats.from[r], p1 = planOrStats.to[r];
+      d = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
+      rot = Math.abs(wrap(p1[2] - p0[2]));
+    }
+    totalDist += d;
+    const col = '#' + ROLE[r].color.toString(16).padStart(6, '0');
+    return `<div class="path-row">
+      <span class="path-role-tag"><span class="path-dot" style="background:${col}"></span>${ROLE[r].name} (${ROLE[r].short})</span>
+      <span class="path-val">${d.toFixed(2)} m · ${Math.round(rot)}°</span>
+    </div>`;
+  }).join('');
+
+  box.innerHTML = `<div class="path-stats-title">
+    <span>Wege des Übergangs</span>
+    <span>Total: ${totalDist.toFixed(1)} m</span>
+  </div>${rows}`;
+}
+
 // ---------- Timeline ----------
 const HOLD_START = 1.0, HOLD_INTER = 0.8, HOLD_END = 1.2;
 let timeline = null, time = 0, playing = true, current = null;
+let currentMode = 'seq'; // 'seq' oder 'single'
+let currentSequence = [];
+let currentActiveBadgeIdx = -1;
+
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 function describePiece(spec, total) {
@@ -344,17 +627,18 @@ function describePiece(spec, total) {
   return `<li>${who}${parts.length ? ': ' + parts.join(', ') : ''}</li>`;
 }
 
+// Baut Timeline für einen einzelnen Block
 function buildTimeline(item, pauseAtInters) {
   const plan = planBlock(item);
   const n = plan.segs.length;
   const phases = [{ hold: true, dur: HOLD_START, pose: plan.frames[0], label: plan.names[0], frame: 0 }];
   if (pauseAtInters) {
     plan.segs.forEach((s, i) => {
-      phases.push({ segs: [i], dur: s.dur });
+      phases.push({ segs: [i], dur: s.dur, plan, isBlock: true });
       phases.push({ hold: true, dur: i === n - 1 ? HOLD_END : HOLD_INTER, pose: segPose(plan, i, 1), label: plan.names[i + 1], frame: i + 1 });
     });
   } else {
-    phases.push({ segs: plan.segs.map((_, i) => i), dur: plan.dur });
+    phases.push({ segs: plan.segs.map((_, i) => i), dur: plan.dur, plan, isBlock: true });
     phases.push({ hold: true, dur: HOLD_END, pose: segPose(plan, n - 1, 1), label: plan.names[n], frame: n });
   }
   let t = 0;
@@ -362,12 +646,289 @@ function buildTimeline(item, pauseAtInters) {
   return { plan, phases, total: t };
 }
 
+// Baut Timeline für eine gesamte Sprungkombination (Randoms & Blöcke)
+function buildSequenceTimeline(entries, pauseAtInters, loopEnabled) {
+  if (!entries || !entries.length) return null;
+  const phases = [];
+  const N = entries.length;
+
+  for (let k = 0; k < N; k++) {
+    const entry = entries[k];
+    if (entry.type === 'random') {
+      phases.push({
+        type: 'hold',
+        hold: true,
+        dur: HOLD_START,
+        pose: entry.item.pose,
+        label: `${entry.key} – ${entry.item.name}`,
+        ref: entry.item.ref,
+        seqIndex: k,
+        title: entry.key
+      });
+    } else if (entry.type === 'block') {
+      const b = entry.item;
+      const plan = planBlock(b);
+      const segCount = plan.segs.length;
+      
+      // Block Start-Formation
+      phases.push({
+        type: 'hold',
+        hold: true,
+        dur: HOLD_INTER,
+        pose: plan.frames[0],
+        label: `Block ${entry.key} Start: ${b.fromName}`,
+        ref: plan.refs[0],
+        seqIndex: k,
+        title: entry.key + ' Start'
+      });
+
+      // Interne Segmente des Blocks
+      if (pauseAtInters) {
+        plan.segs.forEach((s, i) => {
+          phases.push({
+            type: 'blockSeg',
+            plan,
+            segs: [i],
+            dur: s.dur,
+            label: `Block ${entry.key}: ${plan.names[i]} → ${plan.names[i+1]}`,
+            seqIndex: k
+          });
+          phases.push({
+            type: 'hold',
+            hold: true,
+            dur: (i === segCount - 1 ? HOLD_END : HOLD_INTER),
+            pose: segPose(plan, i, 1),
+            label: `Block ${entry.key}: ${plan.names[i+1]}`,
+            ref: plan.refs[i+1],
+            seqIndex: k,
+            title: entry.key + ' ' + plan.names[i+1]
+          });
+        });
+      } else {
+        phases.push({
+          type: 'blockSeg',
+          plan,
+          segs: plan.segs.map((_, i) => i),
+          dur: plan.dur,
+          label: `Block ${entry.key}: ${b.fromName} → ${b.toName}`,
+          seqIndex: k
+        });
+        phases.push({
+          type: 'hold',
+          hold: true,
+          dur: HOLD_END,
+          pose: segPose(plan, segCount - 1, 1),
+          label: `Block ${entry.key} Ende: ${b.toName}`,
+          ref: plan.refs[plan.refs.length - 1],
+          seqIndex: k,
+          title: entry.key + ' Ende'
+        });
+      }
+    }
+
+    // Übergang zur nächsten Formation
+    const nextK = (k + 1 < N) ? k + 1 : (loopEnabled && N > 1 ? 0 : -1);
+    if (nextK !== -1) {
+      const nextEntry = entries[nextK];
+      const fromPose = entry.type === 'random' ? entry.item.pose : entry.item.to;
+      const toPose = nextEntry.type === 'random' ? nextEntry.item.pose : nextEntry.item.from;
+      const fromName = entry.type === 'random' ? entry.key : `${entry.key} Ende`;
+      const toName = nextEntry.type === 'random' ? nextEntry.key : `${nextEntry.key} Start`;
+      const fromRef = entry.type === 'random' ? entry.item.ref : entry.item.toRef;
+      const toRef = nextEntry.type === 'random' ? nextEntry.item.ref : nextEntry.item.fromRef;
+
+      const transPlan = planTransition(fromPose, toPose, fromName, toName);
+      phases.push({
+        type: 'transition',
+        plan: transPlan,
+        dur: transPlan.dur,
+        label: nextK === 0 ? `Loop: ${fromName} → ${toName}` : `Übergang: ${fromName} → ${toName}`,
+        fromSeqIndex: k,
+        toSeqIndex: nextK,
+        fromRef,
+        toRef
+      });
+    }
+  }
+
+  let t = 0;
+  for (const p of phases) { p.start = t; t += p.dur; }
+  return { phases, total: t, entries, isSequence: true };
+}
+
+// Parst Eingabetext in eine Liste von Randoms & Blöcken
+function parseSequenceInput(text) {
+  if (!text) return { sequence: [], errors: [] };
+  const tokens = text.trim().split(/[\s,;+\-]+/).filter(Boolean);
+  const sequence = [];
+  const errors = [];
+
+  for (const raw of tokens) {
+    const t = raw.toUpperCase();
+    const rnd = DATA.randoms.find(r => r.id.toUpperCase() === t);
+    if (rnd) {
+      sequence.push({ type: 'random', item: rnd, key: rnd.id });
+      continue;
+    }
+    const m = t.match(/^(\d+)(.*)$/);
+    if (m) {
+      const num = m[1];
+      const rest = m[2];
+      const isVert = /V|VERT/i.test(rest);
+      const isLevel = /L|LEVEL|ON/i.test(rest);
+
+      let blk = null;
+      if (isVert) {
+        blk = DATA.blocks.find(b => b.id === num && /Vert/i.test(b.variant));
+      } else if (isLevel) {
+        blk = DATA.blocks.find(b => b.id === num && /Level/i.test(b.variant));
+      }
+      if (!blk) {
+        blk = DATA.blocks.find(b => b.id === num && (!b.variant || /Level/i.test(b.variant)))
+           || DATA.blocks.find(b => b.id === num);
+      }
+      if (blk) {
+        sequence.push({
+          type: 'block',
+          item: blk,
+          key: blk.id + (blk.variant ? ` (${blk.variant})` : '')
+        });
+        continue;
+      }
+    }
+    errors.push(raw);
+  }
+  return { sequence, errors };
+}
+
+// Wettkampfrunde auslosen (5-6 Punkte FAI)
+function generateRandomDraw() {
+  const rndPool = [...DATA.randoms];
+  const blkPool = DATA.blocks.filter(b => !b.variant || /Level/i.test(b.variant));
+  const chosen = [];
+  let points = 0;
+
+  while (points < 5) {
+    const pickBlock = (Math.random() < 0.5 || rndPool.length === 0) && blkPool.length > 0;
+    if (pickBlock) {
+      const idx = Math.floor(Math.random() * blkPool.length);
+      const b = blkPool.splice(idx, 1)[0];
+      chosen.push(b.id);
+      points += 2;
+    } else {
+      const idx = Math.floor(Math.random() * rndPool.length);
+      const r = rndPool.splice(idx, 1)[0];
+      chosen.push(r.id);
+      points += 1;
+    }
+  }
+  return chosen.join(' - ');
+}
+
+function updateActiveBadge(idx) {
+  if (idx === currentActiveBadgeIdx) return;
+  currentActiveBadgeIdx = idx;
+  const badges = document.querySelectorAll('.seq-badge');
+  badges.forEach(b => {
+    b.classList.toggle('active', +b.dataset.idx === idx);
+  });
+}
+
+function renderSequenceBadges(entries) {
+  const container = document.getElementById('seqBadges');
+  if (!container) return;
+  if (!entries || !entries.length) {
+    container.innerHTML = '<span style="color:#94a3b8; font-size:12px;">Keine gültige Sequenz</span>';
+    return;
+  }
+  container.innerHTML = entries.map((e, i) => {
+    const isAct = i === currentActiveBadgeIdx;
+    const name = e.type === 'random' ? e.item.name : `${e.item.fromName} → ${e.item.toName}`;
+    const badge = `<span class="seq-badge ${isAct ? 'active' : ''}" data-idx="${i}" title="${name}">
+      ${e.key}
+    </span>`;
+    const arrow = i < entries.length - 1 ? '<span class="seq-arrow">→</span>' : '';
+    return badge + arrow;
+  }).join('');
+
+  container.querySelectorAll('.seq-badge').forEach(b => {
+    b.onclick = () => jumpToSeqIndex(+b.dataset.idx);
+  });
+}
+
+function jumpToSeqIndex(idx) {
+  if (!timeline || !timeline.phases) return;
+  const targetPhase = timeline.phases.find(p => p.seqIndex === idx);
+  if (targetPhase) {
+    time = targetPhase.start;
+    setPlaying(true);
+  }
+}
+
+function prevStep() {
+  if (!timeline || !timeline.phases) return;
+  const curIdx = timeline.phases.findIndex(p => time >= p.start && time < p.start + p.dur);
+  const startIdx = curIdx > 0 ? curIdx - 1 : timeline.phases.length - 1;
+  for (let i = startIdx; i >= 0; i--) {
+    if (timeline.phases[i].type === 'hold' || timeline.phases[i].hold) {
+      time = timeline.phases[i].start;
+      return;
+    }
+  }
+}
+
+function nextStep() {
+  if (!timeline || !timeline.phases) return;
+  const curIdx = timeline.phases.findIndex(p => time >= p.start && time < p.start + p.dur);
+  for (let i = curIdx + 1; i < timeline.phases.length; i++) {
+    if (timeline.phases[i].type === 'hold' || timeline.phases[i].hold) {
+      time = timeline.phases[i].start;
+      return;
+    }
+  }
+  time = 0;
+}
+
+function loadSequence(text) {
+  currentMode = 'seq';
+  const { sequence, errors } = parseSequenceInput(text);
+  if (errors.length) {
+    document.getElementById('phase').textContent = `Unbekannt: ${errors.join(', ')}`;
+  }
+  currentSequence = sequence;
+  renderSequenceBadges(sequence);
+
+  if (!sequence.length) {
+    timeline = null;
+    pathGroup.visible = false;
+    document.getElementById('info').innerHTML = 'Bitte Sprungkombination eingeben (z. B. A 21 C F).';
+    return;
+  }
+
+  const pauseAtInters = document.getElementById('pause').checked;
+  const loopEnabled = document.getElementById('loop').checked;
+  timeline = buildSequenceTimeline(sequence, pauseAtInters, loopEnabled);
+
+  const points = sequence.reduce((sum, s) => sum + (s.type === 'block' ? 2 : 1), 0);
+  document.getElementById('info').innerHTML =
+    `<b>Sprungkombination (${points} Punkte)</b>: ${sequence.map(s => s.key).join(' → ')}` +
+    `<br><span style="color:#64748b; font-size:11.5px;">Weganimation aktiv · Klick auf Badge springt direkt zur Formation</span>`;
+
+  time = 0;
+  currentActiveBadgeIdx = -1;
+  setPlaying(true);
+}
+
 function load(item) {
+  currentMode = 'single';
   current = item;
+  currentActiveBadgeIdx = -1;
   if (item.pose) {
     timeline = { static: true, pose: item.pose, total: 1 };
     document.getElementById('phase').textContent = `${item.id} – ${item.name}`;
     document.getElementById('info').innerHTML = 'Random (statisch)';
+    updatePaths(null, 0);
+    renderPathStats(null);
   } else {
     timeline = buildTimeline(item, document.getElementById('pause').checked);
     const { plan } = timeline;
@@ -381,7 +942,14 @@ function load(item) {
 
 function update(dt) {
   if (!timeline) return;
-  if (timeline.static) { applyPose(timeline.pose); showRefs(current.ref, null, 0); return; }
+  if (timeline.static) {
+    applyPose(timeline.pose);
+    showRefs(current.ref, null, 0);
+    updatePaths(null, 0);
+    renderPathStats(null);
+    return;
+  }
+
   if (playing) {
     time += dt;
     if (time > timeline.total) {
@@ -390,34 +958,59 @@ function update(dt) {
     }
     document.getElementById('scrub').value = Math.round((time / timeline.total) * 1000);
   }
+
   const { plan, phases } = timeline;
   const ph = phases.find(p => time < p.start + p.dur) ?? phases[phases.length - 1];
-  let pose, phase;
-  if (ph.hold) { pose = ph.pose; phase = ph.label; showRefs(plan.refs[ph.frame], null, 0); }
-  else {
-    // Easing über die ganze Phase, innerhalb der Segmente linear -> flüssig durch die Inters
+  let pose, phaseLabel;
+  let activeCurves = null, localT = 0;
+
+  if (ph.type === 'hold' || ph.hold) {
+    pose = ph.pose;
+    phaseLabel = ph.label;
+    showRefs(ph.ref ?? plan?.refs?.[ph.frame], null, 0);
+    activeCurves = null;
+    localT = 0;
+    updateActiveBadge(ph.seqIndex ?? null);
+    renderPathStats(null);
+  } else if (ph.type === 'transition') {
+    localT = Math.min(1, Math.max(0, (time - ph.start) / ph.dur));
+    pose = transitionPose(ph.plan, localT);
+    phaseLabel = ph.label;
+    activeCurves = ph.plan.curves;
+    showRefs(ph.fromRef ?? null, ph.toRef ?? null, localT);
+    updateActiveBadge(ph.toSeqIndex ?? null);
+    renderPathStats(ph.plan);
+  } else if (ph.type === 'blockSeg' || ph.segs) {
+    const curPlan = ph.plan ?? plan;
     let u = ease(Math.min(1, (time - ph.start) / ph.dur)) * ph.dur;
     let i = ph.segs[0];
     for (const j of ph.segs) {
       i = j;
-      if (u <= plan.segs[j].dur) break;
-      u -= plan.segs[j].dur;
+      if (u <= curPlan.segs[j].dur) break;
+      u -= curPlan.segs[j].dur;
     }
-    const t = Math.min(1, u / plan.segs[i].dur);
-    pose = segPose(plan, i, t);
-    phase = `${plan.names[i]} → ${plan.names[i + 1]}`;
-    showRefs(plan.refs[i], plan.refs[i + 1], t);
+    const t = Math.min(1, u / curPlan.segs[i].dur);
+    localT = t;
+    pose = segPose(curPlan, i, t);
+    phaseLabel = ph.label ?? `${curPlan.names[i]} → ${curPlan.names[i + 1]}`;
+    showRefs(curPlan.refs?.[i], curPlan.refs?.[i + 1], t);
+    updateActiveBadge(ph.seqIndex ?? null);
+    activeCurves = getBlockSegmentCurves(curPlan, i);
+    renderPathStats({ from: curPlan.segs[i].from, to: curPlan.segs[i].to });
   }
-  applyPose(pose);
-  document.getElementById('phase').textContent = phase;
+
+  if (pose) applyPose(pose);
+  if (phaseLabel) document.getElementById('phase').textContent = phaseLabel;
+  updatePaths(activeCurves, localT);
 }
 
-// ---------- UI ----------
+// ---------- UI Initialisierung ----------
 const sel = document.getElementById('sel');
 let items = [];
 const blockText = b => `${b.id}: ${b.fromName} – ${b.toName}${b.variant ? ' (' + b.variant + ')' : ''}`;
 const randomText = r => `${r.id}: ${r.name}`;
 const itemText = it => (it.pose ? randomText(it) : blockText(it));
+
 function populateSelect() {
   sel.innerHTML = '';
   items = [];
@@ -433,8 +1026,100 @@ function populateSelect() {
   }
 }
 populateSelect();
+
+// Schnellauswahl-Buttons befüllen (Randoms A-Q und Blöcke 1-22)
+function populateQuickButtons() {
+  const qb = document.getElementById('quickBtns');
+  if (!qb) return;
+  qb.innerHTML = '';
+
+  DATA.randoms.forEach(r => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'chip-btn';
+    btn.textContent = r.id;
+    btn.title = `Random ${r.id}: ${r.name}`;
+    btn.onclick = () => {
+      const inp = document.getElementById('seqInput');
+      inp.value = (inp.value.trim() ? inp.value.trim() + ' ' : '') + r.id;
+      loadSequence(inp.value);
+    };
+    qb.appendChild(btn);
+  });
+
+  const seenBlocks = new Set();
+  DATA.blocks.forEach(b => {
+    if (seenBlocks.has(b.id)) return;
+    seenBlocks.add(b.id);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'chip-btn block';
+    btn.textContent = b.id;
+    btn.title = `Block ${b.id}: ${b.fromName} → ${b.toName}`;
+    btn.onclick = () => {
+      const inp = document.getElementById('seqInput');
+      inp.value = (inp.value.trim() ? inp.value.trim() + ' ' : '') + b.id;
+      loadSequence(inp.value);
+    };
+    qb.appendChild(btn);
+  });
+}
+populateQuickButtons();
+
+// Tab Umschaltung
+document.getElementById('tabSeq').onclick = () => {
+  document.getElementById('tabSeq').classList.add('active');
+  document.getElementById('tabSingle').classList.remove('active');
+  document.getElementById('seqContainer').hidden = false;
+  document.getElementById('singleContainer').hidden = true;
+  loadSequence(document.getElementById('seqInput').value);
+};
+
+document.getElementById('tabSingle').onclick = () => {
+  document.getElementById('tabSingle').classList.add('active');
+  document.getElementById('tabSeq').classList.remove('active');
+  document.getElementById('seqContainer').hidden = true;
+  document.getElementById('singleContainer').hidden = false;
+  load(items[sel.value || 0]);
+};
+
+// Sequenz Eingabe Buttons
+document.getElementById('seqApply').onclick = () => {
+  loadSequence(document.getElementById('seqInput').value);
+};
+document.getElementById('seqInput').onkeydown = e => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    loadSequence(document.getElementById('seqInput').value);
+  }
+};
+document.getElementById('seqRandomDraw').onclick = () => {
+  const draw = generateRandomDraw();
+  document.getElementById('seqInput').value = draw;
+  loadSequence(draw);
+};
+document.getElementById('seqClear').onclick = () => {
+  document.getElementById('seqInput').value = '';
+  loadSequence('');
+};
+
+document.getElementById('prevStep').onclick = prevStep;
+document.getElementById('nextStep').onclick = nextStep;
+
 sel.onchange = () => { load(items[sel.value]); if (editing) { frameIdx = 0; refreshEditor(); } };
-document.getElementById('pause').onchange = () => load(current);
+document.getElementById('pause').onchange = () => {
+  if (currentMode === 'seq') loadSequence(document.getElementById('seqInput').value);
+  else load(current);
+};
+document.getElementById('loop').onchange = () => {
+  if (currentMode === 'seq') loadSequence(document.getElementById('seqInput').value);
+};
+document.getElementById('showPaths').onchange = () => {
+  if (!document.getElementById('showPaths').checked) {
+    pathGroup.visible = false;
+    document.getElementById('pathStatsBox').style.display = 'none';
+  }
+};
 
 const playBtn = document.getElementById('play');
 function setPlaying(p) { playing = p; playBtn.textContent = p ? 'Pause' : 'Play'; }
@@ -770,7 +1455,7 @@ window.addEventListener('resize', resize);
 resize();
 
 setCam('persp');
-load(items[0]);
+loadSequence(document.getElementById('seqInput').value);
 const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
   const dt = clock.getDelta() * parseFloat(document.getElementById('speed').value);
