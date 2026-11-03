@@ -7,16 +7,45 @@
   html, body { margin: 0; height: 100%; overflow: hidden; font-family: system-ui, sans-serif; }
   #c { display: block; width: 100%; height: 100%; }
   #panel {
-    position: absolute; top: 12px; left: 12px; width: 350px; max-height: calc(100% - 24px); overflow-y: auto;
+    position: absolute; top: 12px; left: 12px; width: 356px; height: calc(100vh - 24px); overflow-y: auto;
+    scrollbar-gutter: stable;
     padding: 12px 14px; background: rgba(255,255,255,0.94); border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.22);
-    font-size: 13.5px; box-sizing: border-box;
+    font-size: 13.5px; box-sizing: border-box; z-index: 20;
+    transition: transform 0.22s ease, opacity 0.22s ease;
   }
-  #panel h1 { font-size: 17px; margin: 0 0 8px; }
+  #panel.collapsed {
+    transform: translateX(calc(-100% - 24px));
+    opacity: 0;
+    pointer-events: none;
+  }
+  .panel-header {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 8px;
+  }
+  #panel h1 { font-size: 17px; margin: 0; }
+  #hideUiBtn {
+    margin: 0 !important; padding: 3px 8px !important; font-size: 11.5px !important; font-weight: 600;
+    color: #475569; background: #f8fafc !important; border: 1px solid #cbd5e1 !important;
+  }
+  #hideUiBtn:hover { background: #e2e8f0 !important; color: #0f172a; }
+  #showUiBtn {
+    position: absolute; top: 12px; left: 12px; z-index: 25;
+    padding: 7px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.3);
+    background: rgba(15, 23, 42, 0.84); color: #fff; font-size: 13px; font-weight: 600;
+    cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,0.25); backdrop-filter: blur(4px);
+  }
+  #showUiBtn:hover { background: rgba(15, 23, 42, 0.95); }
+  #showUiBtn[hidden] { display: none !important; }
   #panel select, #panel input[type=range] { width: 100%; }
   #panel button { margin: 3px 2px; padding: 4px 8px; cursor: pointer; border-radius: 4px; border: 1px solid #cbd5e1; background: #fff; font-size: 12px; }
   #panel button:hover { background: #f1f5f9; }
-  #phase { font-weight: 600; margin: 6px 0; min-height: 1.2em; color: #1e293b; }
-  #info { font-size: 12.5px; margin: 6px 0; }
+  #phase {
+    font-weight: 600; margin: 6px 0; height: 22px; line-height: 22px; color: #1e293b;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  #info {
+    font-size: 12px; margin: 6px 0; height: 82px; overflow-y: auto; box-sizing: border-box;
+    padding: 6px 8px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;
+  }
   #info ul { margin: 4px 0; padding-left: 18px; }
   .legend span { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
   .legend div { margin: 2px 0; }
@@ -42,7 +71,11 @@
   .chip-btn.block { background: #f1f5f9 !important; }
 
   /* Sequenz-Kette */
-  .seq-chain { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 8px 0; padding: 6px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; min-height: 28px; }
+  .seq-chain {
+    display: flex; flex-wrap: wrap; gap: 4px; align-items: center; align-content: flex-start;
+    margin: 8px 0; padding: 6px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;
+    height: 58px; overflow-y: auto; box-sizing: border-box;
+  }
   .seq-badge { display: inline-flex; align-items: center; gap: 3px; padding: 3px 7px; border-radius: 4px; background: #ffffff; border: 1px solid #cbd5e1; font-weight: 600; font-size: 12px; cursor: pointer; transition: all 0.15s; }
   .seq-badge:hover { border-color: #3b82f6; }
   .seq-badge.active { background: #2563eb; color: #ffffff; border-color: #1d4ed8; box-shadow: 0 0 0 2px rgba(37,99,235,0.25); }
@@ -52,13 +85,51 @@
   .step-controls { display: flex; gap: 4px; margin: 6px 0; }
   .step-controls button { flex: 1; padding: 5px !important; font-size: 12px !important; font-weight: 600; }
 
-  /* Wege & Statistiken */
-  .path-stats { margin-top: 8px; padding: 6px 8px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 12px; }
-  .path-stats-title { font-weight: 700; margin-bottom: 4px; color: #334155; display: flex; justify-content: space-between; align-items: center; }
-  .path-row { display: flex; justify-content: space-between; align-items: center; margin: 2px 0; font-size: 11.5px; }
+  /* Wege & Statistiken (feste Höhe gegen Layout-Springen) */
+  .path-stats {
+    margin-top: 8px; padding: 6px 8px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;
+    font-size: 12px; height: 106px; box-sizing: border-box;
+  }
+  .path-stats.inactive { opacity: 0.55; }
+  .path-stats-title { font-weight: 700; margin-bottom: 4px; color: #334155; display: flex; justify-content: space-between; align-items: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .path-row { display: flex; justify-content: space-between; align-items: center; margin: 2px 0; font-size: 11.5px; height: 17px; }
   .path-role-tag { font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
   .path-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
   .path-val { font-family: monospace; color: #1e293b; font-weight: 600; }
+
+  /* Kamera & Springer-Sichtfeld (POV) */
+  .cam-section { margin-top: 8px; padding: 7px 8px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; }
+  .cam-row { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-bottom: 4px; }
+  .cam-row:last-child { margin-bottom: 0; }
+  .cam-label { font-size: 11.5px; font-weight: 700; color: #475569; min-width: 62px; }
+  #panel button.cam-btn { margin: 1px 0; padding: 4px 8px; font-weight: 600; flex: 1; }
+  #panel button.cam-btn.active { background: #1e293b; color: #fff; border-color: #0f172a; }
+  #panel button.pov-btn { margin: 1px 0; padding: 4px 6px; font-weight: 700; flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
+  #panel button.pov-btn .pov-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+  #panel button.pov-btn.active { color: #fff; box-shadow: 0 0 0 2px rgba(15,23,42,0.2); }
+  .pov-options { margin-top: 6px; padding-top: 6px; border-top: 1px dashed #cbd5e1; font-size: 12px; transition: opacity 0.15s; }
+  .pov-options.inactive { opacity: 0.5; }
+  .pov-options label { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: 3px 0; }
+  .legend div { cursor: pointer; padding: 2px 4px; border-radius: 4px; transition: background 0.15s; }
+  .legend div:hover { background: #f1f5f9; }
+  .legend div.active-pov { background: #e2e8f0; font-weight: 700; }
+
+  /* POV HUD Overlay */
+  #povHud {
+    position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+    padding: 6px 14px; border-radius: 999px; background: rgba(15, 23, 42, 0.82); color: #fff;
+    font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px;
+    box-shadow: 0 3px 12px rgba(0,0,0,0.28); pointer-events: auto; z-index: 10;
+    border: 2px solid rgba(255,255,255,0.25); backdrop-filter: blur(4px);
+  }
+  #povHud[hidden] { display: none !important; }
+  #povHud .hud-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  #povHud .hud-sub { font-weight: 400; font-size: 11.5px; color: #cbd5e1; }
+  #povHud button {
+    background: rgba(255,255,255,0.16); color: #fff; border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 12px; padding: 2px 8px; font-size: 11px; cursor: pointer; font-weight: 600;
+  }
+  #povHud button:hover { background: rgba(255,255,255,0.28); }
   #editor {
     position: absolute; top: 12px; right: 12px; width: 330px; max-height: calc(100% - 48px); overflow: auto;
     padding: 12px 14px; background: rgba(255,255,255,0.93); border-radius: 8px;
@@ -85,8 +156,19 @@
 </head>
 <body>
 <canvas id="c"></canvas>
+<div id="povHud" hidden>
+  <span class="hud-dot" id="povHudDot"></span>
+  <span id="povHudTitle">Sichtfeld: Point (P)</span>
+  <span class="hud-sub">Maus ziehen = Kopf drehen · Mausrad = Zoom</span>
+  <button type="button" id="povResetLook" title="Blickrichtung geradeaus zurücksetzen">Blick zentrieren</button>
+  <button type="button" id="povExitBtn" title="Zurück zur Außenkamera [0 / Esc]">✕ Außenansicht</button>
+</div>
+<button id="showUiBtn" type="button" hidden title="Bedienfeld einblenden [Taste H]">☰ Steuerung [H]</button>
 <div id="panel">
-  <h1>4-Way FS – 3D</h1>
+  <div class="panel-header">
+    <h1>4-Way FS – 3D</h1>
+    <button id="hideUiBtn" type="button" title="Bedienfeld ausblenden [Taste H]">◀ Ausblenden [H]</button>
+  </div>
 
   <!-- Modus-Tabs -->
   <div class="mode-tabs">
@@ -141,11 +223,33 @@
   
   <div id="pathStatsBox" class="path-stats"></div>
 
-  <div style="margin-top:8px;">
-    Kamera:
-    <button data-cam="top">Oben</button>
-    <button data-cam="persp">Schräg</button>
-    <button data-cam="side">Seitlich</button>
+  <div class="cam-section">
+    <div class="cam-row">
+      <span class="cam-label">Kamera:</span>
+      <button class="cam-btn" data-cam="top" title="Draufsicht von oben [0]">Oben</button>
+      <button class="cam-btn active" data-cam="persp" title="Schräge 3D-Außenansicht">Schräg</button>
+      <button class="cam-btn" data-cam="side" title="Seitliche Ansicht (Level-Kontrolle)">Seitlich</button>
+    </div>
+    <div class="cam-row">
+      <span class="cam-label" title="Ich-Perspektive (Helmkamera / Sichtfeld des Springers)">👁️ Sichtfeld:</span>
+      <button class="pov-btn" data-pov="R" title="Sichtfeld Point (P) [Taste 1]"><span class="pov-dot" style="background:#e53935"></span>P</button>
+      <button class="pov-btn" data-pov="G" title="Sichtfeld Outside Center (OC) [Taste 2]"><span class="pov-dot" style="background:#43a047"></span>OC</button>
+      <button class="pov-btn" data-pov="B" title="Sichtfeld Inside Center (IC) [Taste 3]"><span class="pov-dot" style="background:#1e63d6"></span>IC</button>
+      <button class="pov-btn" data-pov="Y" title="Sichtfeld Tail (T) [Taste 4]"><span class="pov-dot" style="background:#fdd835"></span>T</button>
+    </div>
+    <div id="povOptions" class="pov-options inactive">
+      <label>
+        <span>Blickziel:</span>
+        <select id="povLookMode" style="width:auto; flex:1;">
+          <option value="head">Kopfrichtung (Geradeaus)</option>
+          <option value="center">Formationsmitte (Cross-Ref)</option>
+        </select>
+      </label>
+      <label>
+        <span>Sichtfeld (FOV): <b id="povFovVal">80°</b></span>
+        <input id="povFov" type="range" min="45" max="110" step="1" value="80" style="width:120px;">
+      </label>
+    </div>
   </div>
   <div><button id="editBtn">Bearbeiten</button></div>
   <div><label><input id="refOn" type="checkbox" checked> Workbook-Bilder</label></div>
@@ -153,13 +257,12 @@
   <label>Bildgröße <input id="refSize" type="range" min="0.7" max="1.3" step="0.01" value="1"></label>
   <div id="info"></div>
   <div class="legend">
-    <div><span style="background:#e53935"></span>Point (P)</div>
-    <div><span style="background:#43a047"></span>Outside Center (OC)</div>
-    <div><span style="background:#1e63d6"></span>Inside Center (IC)</div>
-    <div><span style="background:#fdd835"></span>Tail (T)</div>
+    <div data-pov-legend="R" title="Klick: Sichtfeld Point (P) [Taste 1]"><span style="background:#e53935"></span>Point (P) <small style="color:#64748b">· [1]</small></div>
+    <div data-pov-legend="G" title="Klick: Sichtfeld Outside Center (OC) [Taste 2]"><span style="background:#43a047"></span>Outside Center (OC) <small style="color:#64748b">· [2]</small></div>
+    <div data-pov-legend="B" title="Klick: Sichtfeld Inside Center (IC) [Taste 3]"><span style="background:#1e63d6"></span>Inside Center (IC) <small style="color:#64748b">· [3]</small></div>
+    <div data-pov-legend="Y" title="Klick: Sichtfeld Tail (T) [Taste 4]"><span style="background:#fdd835"></span>Tail (T) <small style="color:#64748b">· [4]</small></div>
   </div>
-  <p class="hint">Maus: drehen/zoomen · Leertaste: Play/Pause · Pfeil links = Flugrichtung.
-    Posen aus den Workbook-Grafiken erkannt, Drehrichtungen teils geschätzt.</p>
+  <p class="hint">Maus: drehen/zoomen · H: UI ein/aus · 1–4: Springer-Sichtfeld · 0: Außenkamera · Leertaste: Play/Pause.</p>
 </div>
 
 <div id="editor" hidden>
@@ -238,10 +341,13 @@ const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 200);
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
 
-scene.add(new THREE.HemisphereLight(0xffffff, 0x556677, 1.6));
-const sun = new THREE.DirectionalLight(0xffffff, 1.4);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x556677, 1.55));
+const sun = new THREE.DirectionalLight(0xffffff, 1.5);
 sun.position.set(5, 12, 4);
 scene.add(sun);
+const fillLight = new THREE.DirectionalLight(0xdbeafe, 0.55);
+fillLight.position.set(-6, -5, -6);
+scene.add(fillLight);
 
 const grid = new THREE.GridHelper(16, 16, 0x6a8fb0, 0x8fb3d3);
 grid.position.y = -2.5;
@@ -256,12 +362,24 @@ const cross = new THREE.LineSegments(
 scene.add(cross);
 scene.add(new THREE.ArrowHelper(new THREE.Vector3(-1, 0, 0), new THREE.Vector3(6, -2.45, -6), 3, 0xffffff, 0.6, 0.4));
 
-// ---------- Springer-Modell (Bauch unten, Kopf Richtung -z) ----------
-function limb(a, b, r, mat) {
+// ---------- Realistisches 4-Way FS Springer-Modell (Bauch unten, Kopf Richtung -z) ----------
+function limb(a, b, r, mat, scaleX = 1, scaleZ = 1) {
   const dir = b.clone().sub(a);
-  const mesh = new THREE.Mesh(new THREE.CapsuleGeometry(r, dir.length(), 4, 10), mat);
+  const mesh = new THREE.Mesh(new THREE.CapsuleGeometry(r, dir.length(), 8, 16), mat);
   mesh.position.copy(a).add(b).multiplyScalar(0.5);
   mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+  if (scaleX !== 1 || scaleZ !== 1) mesh.scale.set(scaleX, 1, scaleZ);
+  return mesh;
+}
+
+function taperedLimb(a, b, rTop, rBot, mat, scaleX = 1, scaleZ = 1) {
+  const dir = b.clone().sub(a);
+  const len = dir.length();
+  const geo = new THREE.CylinderGeometry(rBot, rTop, len, 16, 1, false);
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.copy(a).add(b).multiplyScalar(0.5);
+  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+  if (scaleX !== 1 || scaleZ !== 1) mesh.scale.set(scaleX, 1, scaleZ);
   return mesh;
 }
 
@@ -282,36 +400,244 @@ function label(text, color) {
 
 function makeFlyer(role) {
   const V = (x, y, z) => new THREE.Vector3(x, y, z);
-  const suit = new THREE.MeshStandardMaterial({ color: ROLE[role].color, roughness: 0.6 });
-  const dark = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 });
+  const roleCol = new THREE.Color(ROLE[role].color);
+  const darkRoleCol = roleCol.clone().multiplyScalar(0.55);
+
+  const suit = new THREE.MeshStandardMaterial({ color: ROLE[role].color, roughness: 0.48, metalness: 0.05 });
+  const suitSecondary = new THREE.MeshStandardMaterial({ color: darkRoleCol, roughness: 0.58, metalness: 0.05 });
+  const corduraDark = new THREE.MeshStandardMaterial({ color: 0x1e242b, roughness: 0.72, metalness: 0.08 });
+  const rigMat = new THREE.MeshStandardMaterial({ color: 0x15191e, roughness: 0.65, metalness: 0.12 });
+  const strapMat = new THREE.MeshStandardMaterial({ color: 0x2b313a, roughness: 0.6, metalness: 0.1 });
+  const gripperMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.38, metalness: 0.05 });
+  const roleGripperMat = new THREE.MeshStandardMaterial({ color: ROLE[role].color, roughness: 0.35, metalness: 0.08 });
+  const gloveMat = new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.55, metalness: 0.1 });
+  const helmetMat = new THREE.MeshStandardMaterial({ color: ROLE[role].color, roughness: 0.2, metalness: 0.22 });
+  const visorMat = new THREE.MeshStandardMaterial({ color: 0x091326, roughness: 0.07, metalness: 0.85 });
+  const chromeMat = new THREE.MeshStandardMaterial({ color: 0xd4d4d8, roughness: 0.2, metalness: 0.85 });
+
   const body = new THREE.Group();
 
-  const torso = limb(V(0, 0, 0.35), V(0, 0, -0.35), 0.2, suit);
-  torso.scale.set(1.4, 1, 0.75);
-  body.add(torso);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.17, 16, 12), dark);
-  head.position.set(0, 0.05, -0.72);
+  // --- 1. Anatomischer Torso im Hohlkreuz (Belly-to-Earth Arch) ---
+  // Brustkorb (leicht nach oben gewölbt Richtung Kopf)
+  const chest = limb(V(0, -0.01, -0.04), V(0, 0.03, -0.32), 0.19, suit, 1.38, 0.68);
+  body.add(chest);
+
+  // Bauch / Taille (tiefster Punkt des Körperschwerpunkts)
+  const abdomen = limb(V(0, -0.01, 0.14), V(0, -0.02, -0.06), 0.175, suitSecondary, 1.28, 0.66);
+  body.add(abdomen);
+
+  // Becken / Hüfte (wieder leicht ansteigend zu den Beinen)
+  const pelvis = limb(V(0, 0.02, 0.35), V(0, -0.01, 0.12), 0.18, corduraDark, 1.32, 0.68);
+  body.add(pelvis);
+
+  // Schulterkappen (Deltoids)
+  for (const s of [-1, 1]) {
+    const deltoid = new THREE.Mesh(new THREE.SphereGeometry(0.115, 14, 12), suit);
+    deltoid.scale.set(1.15, 0.82, 1.05);
+    deltoid.position.set(0.25 * s, 0.02, -0.30);
+    body.add(deltoid);
+  }
+
+  // --- 2. Fallschirm-Gurtzeug & Container (Rig auf dem Rücken) ---
+  const rigGroup = new THREE.Group();
+  // Haupt- und Reserve-Container auf dem Rücken (+y)
+  const mainPack = new THREE.Mesh(new THREE.BoxGeometry(0.30, 0.13, 0.44), rigMat);
+  mainPack.position.set(0, 0.14, 0.01);
+  mainPack.rotation.x = -0.06;
+  rigGroup.add(mainPack);
+
+  // Abgerundete Container-Kappe oben (Reserve) & unten (Main)
+  const reserveTop = new THREE.Mesh(new THREE.CylinderGeometry(0.145, 0.15, 0.12, 16), rigMat);
+  reserveTop.rotation.x = Math.PI / 2;
+  reserveTop.scale.set(1, 1, 0.45);
+  reserveTop.position.set(0, 0.145, -0.20);
+  rigGroup.add(reserveTop);
+
+  const mainBot = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.145, 0.12, 16), rigMat);
+  mainBot.rotation.x = Math.PI / 2;
+  mainBot.scale.set(1, 1, 0.45);
+  mainBot.position.set(0, 0.13, 0.22);
+  rigGroup.add(mainBot);
+
+  // Pin-Flap / Farbakzent auf dem Container-Rücken
+  const pinFlap = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.02, 0.26), suit);
+  pinFlap.position.set(0, 0.205, -0.02);
+  pinFlap.rotation.x = -0.06;
+  rigGroup.add(pinFlap);
+
+  // BOC Pilot-Chute Handle (Hilfsschirm-Griff rechts unten am Container)
+  const bocPud = new THREE.Mesh(new THREE.CapsuleGeometry(0.026, 0.06, 6, 10), gripperMat);
+  bocPud.rotation.z = Math.PI / 2;
+  bocPud.position.set(0.16, 0.11, 0.21);
+  rigGroup.add(bocPud);
+
+  // Schultergurte, 3-Ring-Beschläge & Brustgurt
+  for (const s of [-1, 1]) {
+    const shStrap = limb(V(0.12 * s, 0.12, -0.18), V(0.15 * s, 0.06, -0.33), 0.032, strapMat, 1.4, 0.5);
+    rigGroup.add(shStrap);
+    const frontStrap = limb(V(0.15 * s, 0.05, -0.33), V(0.14 * s, -0.09, -0.08), 0.028, strapMat, 1.3, 0.45);
+    rigGroup.add(frontStrap);
+    // 3-Ring Release auf der Schulter
+    const ring3 = new THREE.Mesh(new THREE.TorusGeometry(0.024, 0.006, 8, 14), chromeMat);
+    ring3.rotation.x = Math.PI / 2;
+    ring3.position.set(0.145 * s, 0.085, -0.26);
+    rigGroup.add(ring3);
+  }
+  body.add(rigGroup);
+
+  // --- 3. Full-Face Skydiving Helm (Cookie G35/G4 Stil) mit Visier ---
+  const head = new THREE.Group();
+  head.position.set(0, 0.08, -0.70);
+  // Nacken im Hohlkreuz leicht angehoben (Blick nach vorn/leicht unten zur Formation)
+  head.rotation.x = 0.22;
+
+  // Helmschale
+  const helmetShell = new THREE.Mesh(new THREE.SphereGeometry(0.165, 24, 20), helmetMat);
+  helmetShell.scale.set(0.95, 1.02, 1.12);
+  head.add(helmetShell);
+
+  // Kinnbügel (Full-Face Chinbar)
+  const chinBar = new THREE.Mesh(new THREE.SphereGeometry(0.135, 18, 14), corduraDark);
+  chinBar.scale.set(0.88, 0.65, 0.95);
+  chinBar.position.set(0, -0.055, -0.055);
+  head.add(chinBar);
+
+  // Gebogenes Panorama-Visier (Spiegel-/Tönungsvisier an der Vorderseite -z)
+  const visorGeo = new THREE.SphereGeometry(0.169, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.44);
+  const visor = new THREE.Mesh(visorGeo, visorMat);
+  visor.scale.set(0.94, 0.98, 1.08);
+  visor.rotation.x = -Math.PI * 0.46;
+  visor.position.set(0, 0.01, -0.01);
+  head.add(visor);
+
+  // Seitliche Visier-Mechanik-Platten
+  for (const s of [-1, 1]) {
+    const pivotPlate = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.02, 12), chromeMat);
+    pivotPlate.rotation.z = Math.PI / 2;
+    pivotPlate.position.set(0.152 * s, 0.0, -0.02);
+    head.add(pivotPlate);
+  }
+
+  // Hals/Kragen
+  const neck = limb(V(0, -0.04, 0.12), V(0, -0.06, 0.25), 0.075, corduraDark);
+  head.add(neck);
   body.add(head);
 
+  // --- 4. Arme, Unterarm-Gripper, Handschuhe & Höhenmesser ---
   for (const s of [-1, 1]) {
-    const sh = V(0.26 * s, 0, -0.3), el = V(0.62 * s, 0, -0.45), ha = V(0.62 * s, 0.05, -0.85);
-    body.add(limb(sh, el, 0.08, suit), limb(el, ha, 0.07, suit));
-    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 8), dark);
-    hand.position.copy(ha);
-    body.add(hand);
-    const hip = V(0.13 * s, 0, 0.35), kn = V(0.3 * s, 0, 0.85), ft = V(0.33 * s, 0.45, 1.05);
-    body.add(limb(hip, kn, 0.1, suit), limb(kn, ft, 0.08, suit));
-    const foot = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), dark);
-    foot.position.copy(ft);
-    body.add(foot);
+    const sh = V(0.26 * s, 0.01, -0.30);
+    const el = V(0.61 * s, 0.0, -0.45);
+    const wr = V(0.62 * s, 0.04, -0.78);
+    const ha = V(0.62 * s, 0.05, -0.86);
+
+    // Oberarm & Unterarm (Mantis-Haltung)
+    body.add(taperedLimb(sh, el, 0.082, 0.068, suit));
+    body.add(taperedLimb(el, wr, 0.068, 0.054, suit));
+
+    // Ellenbogen-Gelenk
+    const elbowJoint = new THREE.Mesh(new THREE.SphereGeometry(0.068, 12, 10), suitSecondary);
+    elbowJoint.position.copy(el);
+    body.add(elbowJoint);
+
+    // Competition Unterarm-Gripper (Wulst-Griff außen am Unterarm)
+    const armGripA = V(0.665 * s, 0.025, -0.48);
+    const armGripB = V(0.665 * s, 0.055, -0.74);
+    body.add(limb(armGripA, armGripB, 0.026, gripperMat));
+
+    // Oberarm-Innengripper
+    const biGripA = V(0.35 * s, 0.03, -0.34);
+    const biGripB = V(0.55 * s, 0.02, -0.42);
+    body.add(limb(biGripA, biGripB, 0.022, roleGripperMat));
+
+    // Weiße Handgelenk-Manschette
+    const cuff = limb(V(0.62 * s, 0.038, -0.75), V(0.62 * s, 0.045, -0.80), 0.057, gripperMat);
+    body.add(cuff);
+
+    // Höhenmesser (Altimeter) am linken Handgelenk (s === -1)
+    if (s === -1) {
+      const altiCase = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.045, 0.024, 16), corduraDark);
+      altiCase.position.set(-0.62, 0.095, -0.76);
+      altiCase.rotation.z = -0.25;
+      body.add(altiCase);
+      const altiDial = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.034, 0.026, 16), gripperMat);
+      altiDial.position.copy(altiCase.position);
+      altiDial.rotation.copy(altiCase.rotation);
+      body.add(altiDial);
+    }
+
+    // Geformte Hand mit Handfläche, Fingern & Daumen
+    const handGroup = new THREE.Group();
+    handGroup.position.copy(ha);
+    const palm = new THREE.Mesh(new THREE.SphereGeometry(0.058, 14, 10), gloveMat);
+    palm.scale.set(1.1, 0.55, 1.35);
+    handGroup.add(palm);
+
+    // Fingerkuppen leicht nach innen/vorn gekrümmt (griffbereit)
+    const fingers = new THREE.Mesh(new THREE.CapsuleGeometry(0.028, 0.05, 6, 10), gloveMat);
+    fingers.rotation.z = Math.PI / 2;
+    fingers.rotation.y = -0.25 * s;
+    fingers.position.set(-0.01 * s, -0.005, -0.055);
+    handGroup.add(fingers);
+
+    // Daumen nach innen
+    const thumb = new THREE.Mesh(new THREE.CapsuleGeometry(0.018, 0.04, 6, 8), gloveMat);
+    thumb.rotation.z = 0.9 * s;
+    thumb.rotation.x = 0.6;
+    thumb.position.set(-0.055 * s, 0.0, -0.015);
+    handGroup.add(thumb);
+    body.add(handGroup);
+
+    // --- 5. Beine, Oberschenkel-Gripper & 4-Way FS Booties ---
+    const hip = V(0.15 * s, 0.01, 0.35);
+    const kn = V(0.31 * s, 0.0, 0.85);
+    const ank = V(0.33 * s, 0.36, 1.03);
+    const ft = V(0.33 * s, 0.47, 1.07);
+
+    // Oberschenkel & Unterschenkel
+    body.add(taperedLimb(hip, kn, 0.108, 0.086, suit, 1.08, 0.95));
+    body.add(taperedLimb(kn, ank, 0.084, 0.064, suit));
+
+    // Verstärktes Cordura-Kniepolster
+    const kneePad = new THREE.Mesh(new THREE.SphereGeometry(0.088, 14, 12), corduraDark);
+    kneePad.scale.set(1.0, 0.92, 1.1);
+    kneePad.position.copy(kn);
+    body.add(kneePad);
+
+    // Großer seitlicher Bein-Gripper (Wichtigster Griff im 4-Way FS!)
+    const legGripA = V(0.24 * s, 0.03, 0.40);
+    const legGripB = V(0.40 * s, 0.03, 0.81);
+    body.add(limb(legGripA, legGripB, 0.032, gripperMat));
+
+    // Kontrast-Streifen entlang des Bein-Grippers
+    const legStripeA = V(0.22 * s, 0.065, 0.41);
+    const legStripeB = V(0.375 * s, 0.065, 0.80);
+    body.add(limb(legStripeA, legStripeB, 0.018, roleGripperMat));
+
+    // Aerodynamischer FS-Bootie (Schuh + gespannte Bootie-Fläche vom Knie bis zur Fußspitze)
+    const bootShoe = limb(ank, ft, 0.068, corduraDark, 0.95, 1.35);
+    body.add(bootShoe);
+    const bootWedge = taperedLimb(
+      V(0.31 * s, 0.06, 0.86),
+      V(0.33 * s, 0.44, 1.06),
+      0.065,
+      0.085,
+      corduraDark,
+      0.55,
+      1.35
+    );
+    body.add(bootWedge);
   }
+
   body.scale.setScalar(1.25);
   body.userData.role = role;
 
   const root = new THREE.Group();
-  root.add(body, label(ROLE[role].short, ROLE[role].color));
+  const lbl = label(ROLE[role].short, ROLE[role].color);
+  root.add(body, lbl);
   root.userData.body = body;
   root.userData.suit = suit;
+  root.userData.head = head;
+  root.userData.label = lbl;
   scene.add(root);
   return root;
 }
@@ -574,38 +900,47 @@ function updatePaths(curves, localT) {
   }
 }
 
+let lastPathStats = null;
+
 function renderPathStats(planOrStats) {
   const box = document.getElementById('pathStatsBox');
   if (!box) return;
   const show = document.getElementById('showPaths')?.checked;
-  if (!show || !planOrStats) {
-    box.style.display = 'none';
-    return;
-  }
-  box.style.display = 'block';
+  if (planOrStats) lastPathStats = planOrStats;
+  const activeStats = show ? (planOrStats ?? lastPathStats) : null;
+  const isHold = show && !planOrStats;
+
+  box.classList.toggle('inactive', !show || isHold);
 
   let totalDist = 0;
   const rows = ROLES.map(r => {
+    const col = '#' + ROLE[r].color.toString(16).padStart(6, '0');
+    if (!activeStats) {
+      return `<div class="path-row">
+        <span class="path-role-tag"><span class="path-dot" style="background:${col}"></span>${ROLE[r].name} (${ROLE[r].short})</span>
+        <span class="path-val">– m · –°</span>
+      </div>`;
+    }
     let d = 0, rot = 0;
-    if (planOrStats.flyerMoves?.[r]) {
-      d = planOrStats.flyerMoves[r].dist;
-      rot = planOrStats.flyerMoves[r].dRot;
-    } else if (planOrStats.from && planOrStats.to) {
-      const p0 = planOrStats.from[r], p1 = planOrStats.to[r];
+    if (activeStats.flyerMoves?.[r]) {
+      d = activeStats.flyerMoves[r].dist;
+      rot = activeStats.flyerMoves[r].dRot;
+    } else if (activeStats.from && activeStats.to) {
+      const p0 = activeStats.from[r], p1 = activeStats.to[r];
       d = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
       rot = Math.abs(wrap(p1[2] - p0[2]));
     }
     totalDist += d;
-    const col = '#' + ROLE[r].color.toString(16).padStart(6, '0');
     return `<div class="path-row">
       <span class="path-role-tag"><span class="path-dot" style="background:${col}"></span>${ROLE[r].name} (${ROLE[r].short})</span>
       <span class="path-val">${d.toFixed(2)} m · ${Math.round(rot)}°</span>
     </div>`;
   }).join('');
 
+  const statusText = !show ? 'Ausgeblendet' : (activeStats ? `Total: ${totalDist.toFixed(1)} m` : 'Hold');
   box.innerHTML = `<div class="path-stats-title">
     <span>Wege des Übergangs</span>
-    <span>Total: ${totalDist.toFixed(1)} m</span>
+    <span>${statusText}</span>
   </div>${rows}`;
 }
 
@@ -891,6 +1226,7 @@ function nextStep() {
 
 function loadSequence(text) {
   currentMode = 'seq';
+  lastPathStats = null;
   const { sequence, errors } = parseSequenceInput(text);
   if (errors.length) {
     document.getElementById('phase').textContent = `Unbekannt: ${errors.join(', ')}`;
@@ -901,6 +1237,7 @@ function loadSequence(text) {
   if (!sequence.length) {
     timeline = null;
     pathGroup.visible = false;
+    renderPathStats(null);
     document.getElementById('info').innerHTML = 'Bitte Sprungkombination eingeben (z. B. A 21 C F).';
     return;
   }
@@ -916,6 +1253,7 @@ function loadSequence(text) {
 
   time = 0;
   currentActiveBadgeIdx = -1;
+  renderPathStats(null);
   setPlaying(true);
 }
 
@@ -923,6 +1261,7 @@ function load(item) {
   currentMode = 'single';
   current = item;
   currentActiveBadgeIdx = -1;
+  lastPathStats = null;
   if (item.pose) {
     timeline = { static: true, pose: item.pose, total: 1 };
     document.getElementById('phase').textContent = `${item.id} – ${item.name}`;
@@ -936,6 +1275,7 @@ function load(item) {
       `<b>Block ${esc(item.id)}${item.variant ? ' (' + esc(item.variant) + ')' : ''}</b><ul>` +
       plan.specs.map((s, i) => describePiece(s, plan.totals[i])).join('') + '</ul>' +
       `Ablauf: ${plan.names.map(esc).join(' → ')}`;
+    renderPathStats(null);
   }
   time = 0;
 }
@@ -1117,9 +1457,20 @@ document.getElementById('loop').onchange = () => {
 document.getElementById('showPaths').onchange = () => {
   if (!document.getElementById('showPaths').checked) {
     pathGroup.visible = false;
-    document.getElementById('pathStatsBox').style.display = 'none';
   }
+  renderPathStats(null);
 };
+
+// UI Ein-/Ausblenden (Bedienfeld kollabieren)
+let uiCollapsed = false;
+function setUiCollapsed(collapsed) {
+  uiCollapsed = collapsed;
+  document.getElementById('panel').classList.toggle('collapsed', collapsed);
+  document.getElementById('showUiBtn').hidden = !collapsed;
+  if (!povRole && activeCam) setCam(activeCam);
+}
+document.getElementById('hideUiBtn').onclick = () => setUiCollapsed(true);
+document.getElementById('showUiBtn').onclick = () => setUiCollapsed(false);
 
 const playBtn = document.getElementById('play');
 function setPlaying(p) { playing = p; playBtn.textContent = p ? 'Pause' : 'Play'; }
@@ -1134,18 +1485,199 @@ document.getElementById('scrub').oninput = e => {
 window.addEventListener('keydown', e => {
   if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) && e.target.type !== 'range' && e.target.type !== 'checkbox') return;
   if (editing) { editKey(e); return; }
-  if (e.code === 'Space') { e.preventDefault(); playBtn.click(); }
+  if (e.code === 'Space') { e.preventDefault(); playBtn.click(); return; }
+  if (e.code === 'KeyH') { e.preventDefault(); setUiCollapsed(!uiCollapsed); return; }
+  if (e.key === '1') { e.preventDefault(); setPov('R'); return; }
+  if (e.key === '2') { e.preventDefault(); setPov('G'); return; }
+  if (e.key === '3') { e.preventDefault(); setPov('B'); return; }
+  if (e.key === '4') { e.preventDefault(); setPov('Y'); return; }
+  if (e.key === '0' || (e.key === 'Escape' && povRole)) { e.preventDefault(); setCam(activeCam || 'persp'); return; }
 });
 
 // Blickziel etwas nach links versetzt, damit die Formation nicht hinter dem Panel liegt
 const CAMS = { top: [14, 0.01], persp: [11, 10], side: [1.5, 12] };
+let activeCam = 'persp';
+let povRole = null;
+let povYawOffset = 0;
+let povPitchOffset = -10;
+let povLookDragging = false, povLastX = 0, povLastY = 0;
+
+function updateCamUI() {
+  document.querySelectorAll('[data-cam]').forEach(b => {
+    b.classList.toggle('active', !povRole && b.dataset.cam === activeCam);
+  });
+  document.querySelectorAll('[data-pov]').forEach(b => {
+    const r = b.dataset.pov;
+    const isAct = povRole === r;
+    b.classList.toggle('active', isAct);
+    if (isAct) {
+      const hex = '#' + ROLE[r].color.toString(16).padStart(6, '0');
+      b.style.background = hex;
+      b.style.borderColor = hex;
+      b.style.color = r === 'Y' ? '#0f172a' : '#ffffff';
+    } else {
+      b.style.background = '';
+      b.style.borderColor = '';
+      b.style.color = '';
+    }
+  });
+  document.querySelectorAll('[data-pov-legend]').forEach(el => {
+    el.classList.toggle('active-pov', povRole === el.dataset.povLegend);
+  });
+
+  const povOpts = document.getElementById('povOptions');
+  const povHud = document.getElementById('povHud');
+  povOpts.classList.toggle('inactive', !povRole);
+  if (povRole) {
+    povHud.hidden = false;
+    const hex = '#' + ROLE[povRole].color.toString(16).padStart(6, '0');
+    document.getElementById('povHudDot').style.background = hex;
+    document.getElementById('povHud').style.borderColor = hex;
+    document.getElementById('povHudTitle').textContent = `Sichtfeld: ${ROLE[povRole].name} (${ROLE[povRole].short})`;
+  } else {
+    povHud.hidden = true;
+  }
+
+  for (const r of ROLES) {
+    flyers[r].userData.head.visible = (r !== povRole);
+    flyers[r].userData.label.visible = (r !== povRole);
+  }
+}
+
 const setCam = k => {
-  const tx = editing ? 0 : -1.8, [y, z] = CAMS[k];
+  povRole = null;
+  activeCam = k;
+  camera.fov = 45;
+  camera.updateProjectionMatrix();
+  controls.enabled = true;
+  const tx = (editing || uiCollapsed) ? 0 : -1.8, [y, z] = CAMS[k];
   camera.position.set(tx, y * 1.35, z * 1.35);
   controls.target.set(tx, 0, 0);
   controls.update();
+  updateCamUI();
 };
+
+function setPov(role) {
+  if (!ROLES.includes(role)) return;
+  if (povRole === role) {
+    if (Math.abs(povYawOffset) > 1 || Math.abs(povPitchOffset - (-10)) > 1) {
+      povYawOffset = 0;
+      povPitchOffset = -10;
+      updatePovCamera();
+      return;
+    }
+    setCam(activeCam || 'persp');
+    return;
+  }
+  povRole = role;
+  povYawOffset = 0;
+  povPitchOffset = -10;
+  controls.enabled = false;
+  camera.fov = parseFloat(document.getElementById('povFov').value) || 80;
+  camera.updateProjectionMatrix();
+  updateCamUI();
+  updatePovCamera();
+}
+
+function updatePovCamera() {
+  if (!povRole) return;
+  const f = flyers[povRole];
+  const bodyYaw = f.userData.body.rotation.y;
+  // Augenposition an der Vorderseite des Helms (Hände bleiben unten links/rechts im peripheren Sichtfeld sichtbar)
+  const forwardDist = 0.62;
+  const upDist = 0.25;
+  const eyeX = f.position.x - Math.sin(bodyYaw) * forwardDist;
+  const eyeY = f.position.y + upDist;
+  const eyeZ = f.position.z - Math.cos(bodyYaw) * forwardDist;
+
+  const lookMode = document.getElementById('povLookMode').value;
+  let yaw, pitch;
+
+  if (lookMode === 'center') {
+    let cx = 0, cy = 0, cz = 0;
+    for (const r of ROLES) {
+      if (r !== povRole) {
+        cx += flyers[r].position.x / 3;
+        cy += flyers[r].position.y / 3;
+        cz += flyers[r].position.z / 3;
+      }
+    }
+    const dx = cx - eyeX, dy = (cy - 0.1) - eyeY, dz = cz - eyeZ;
+    const baseYaw = Math.atan2(-dx, -dz);
+    const basePitch = Math.atan2(dy, Math.hypot(dx, dz));
+    yaw = baseYaw + povYawOffset * DEG;
+    pitch = Math.max(-80 * DEG, Math.min(80 * DEG, basePitch + (povPitchOffset + 10) * DEG));
+  } else {
+    yaw = bodyYaw + povYawOffset * DEG;
+    pitch = Math.max(-80 * DEG, Math.min(80 * DEG, povPitchOffset * DEG));
+  }
+
+  const cosP = Math.cos(pitch), sinP = Math.sin(pitch);
+  const dirX = -Math.sin(yaw) * cosP;
+  const dirY = sinP;
+  const dirZ = -Math.cos(yaw) * cosP;
+
+  camera.position.set(eyeX, eyeY, eyeZ);
+  camera.up.set(0, 1, 0);
+  camera.lookAt(eyeX + dirX * 10, eyeY + dirY * 10, eyeZ + dirZ * 10);
+}
+
 document.querySelectorAll('[data-cam]').forEach(b => b.onclick = () => setCam(b.dataset.cam));
+document.querySelectorAll('[data-pov]').forEach(b => b.onclick = () => setPov(b.dataset.pov));
+document.querySelectorAll('[data-pov-legend]').forEach(el => el.onclick = () => setPov(el.dataset.povLegend));
+
+document.getElementById('povResetLook').onclick = () => {
+  povYawOffset = 0;
+  povPitchOffset = -10;
+  updatePovCamera();
+};
+document.getElementById('povExitBtn').onclick = () => setCam(activeCam || 'persp');
+document.getElementById('povLookMode').onchange = () => {
+  povYawOffset = 0;
+  povPitchOffset = -10;
+  updatePovCamera();
+};
+document.getElementById('povFov').oninput = e => {
+  const v = parseFloat(e.target.value);
+  document.getElementById('povFovVal').textContent = `${Math.round(v)}°`;
+  if (povRole) {
+    camera.fov = v;
+    camera.updateProjectionMatrix();
+  }
+};
+
+// Kopf-Umschauen per Maus im POV-Modus
+canvas.addEventListener('pointerdown', e => {
+  if (!povRole || editing || e.button !== 0) return;
+  povLookDragging = true;
+  povLastX = e.clientX;
+  povLastY = e.clientY;
+});
+window.addEventListener('pointermove', e => {
+  if (!povLookDragging || !povRole) return;
+  const dx = e.clientX - povLastX;
+  const dy = e.clientY - povLastY;
+  povLastX = e.clientX;
+  povLastY = e.clientY;
+  povYawOffset -= dx * 0.35;
+  povPitchOffset = Math.max(-75, Math.min(60, povPitchOffset - dy * 0.35));
+});
+window.addEventListener('pointerup', () => { povLookDragging = false; });
+canvas.addEventListener('dblclick', () => {
+  if (!povRole) return;
+  povYawOffset = 0;
+  povPitchOffset = -10;
+});
+canvas.addEventListener('wheel', e => {
+  if (!povRole) return;
+  e.preventDefault();
+  const fovSlider = document.getElementById('povFov');
+  const nextFov = Math.max(45, Math.min(110, (parseFloat(fovSlider.value) || 80) + Math.sign(e.deltaY) * 3));
+  fovSlider.value = nextFov;
+  document.getElementById('povFovVal').textContent = `${Math.round(nextFov)}°`;
+  camera.fov = nextFov;
+  camera.updateProjectionMatrix();
+}, { passive: false });
 
 // ---------- Editor ----------
 let editing = false, frameIdx = 0, selRole = null, dragging = false;
@@ -1461,7 +1993,8 @@ renderer.setAnimationLoop(() => {
   const dt = clock.getDelta() * parseFloat(document.getElementById('speed').value);
   if (editing) { applyPose(currentFrame().pose); showRefs(currentFrame().ref, null, 0); }
   else update(dt);
-  controls.update();
+  if (povRole) updatePovCamera();
+  else controls.update();
   renderer.render(scene, camera);
 });
 </script>
