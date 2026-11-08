@@ -314,11 +314,12 @@ const ROLE = {
 const SCALE = 1.35;
 const DEG = Math.PI / 180;
 
-const STORE_KEY = 'fs4way-data-v1';
+const STORE_KEY = 'fs4way-data-v2';
 const clone = o => JSON.parse(JSON.stringify(o));
 // Deep-Copy: in formations.js teilen sich manche Blöcke dieselben Pose-Objekte
 let DATA = clone(window.FS_DATA), fromStorage = false;
 try {
+  localStorage.removeItem('fs4way-data-v1');
   const saved = localStorage.getItem(STORE_KEY);
   if (saved) { const d = JSON.parse(saved); validateData(d); DATA = d; fromStorage = true; }
 } catch { /* beschädigter Speicher -> Originaldaten */ }

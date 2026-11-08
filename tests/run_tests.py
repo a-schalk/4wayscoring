@@ -339,6 +339,10 @@ def test_formation_3d_and_continuity_booklet():
     assert len(all_blocks) == 28
     assert len(non_on_level) == 22
     assert len({b["id"] for b in non_on_level}) == 22
+    rnd_d = next(r for r in fs_data["randoms"] if r["id"] == "D")
+    assert rnd_d["pose"]["R"][2] == 50
+    f_d = formation_db.get_formation("D")
+    assert f_d.state_initial["Point"].heading_deg == 310.0
 
 
 def main():

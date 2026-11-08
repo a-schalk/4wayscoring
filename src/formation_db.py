@@ -279,10 +279,10 @@ def _build_dive_pool() -> Dict[str, FormationDefinition]:
         "Point swinging legs out of reach; Centers over-reaching."
 ],
         state_initial={
-            "Point": Flyer3DState(-11.1, 32.6, 0.0, 133.0, head_turn_deg=45, gaze_target="OC", grippers_presented=['Left Ankle']),
-            "OC": Flyer3DState(-33.8, 8.9, 0.0, 311.7, head_turn_deg=-20, gaze_target="Point", right_grip="Point Left Ankle"),
-            "IC": Flyer3DState(39.8, 1.1, 0.0, 155.8, head_turn_deg=30, gaze_target="Tail", left_grip="OC Left Wrist"),
-            "Tail": Flyer3DState(5.1, -42.6, 0.0, 272.9, head_turn_deg=-30, gaze_target="IC", right_grip="IC Right Ankle"),
+            "Point": Flyer3DState(-11.1, 32.6, 0.0, 310.0, head_turn_deg=45, gaze_target="OC", grippers_presented=['Left Ankle', 'Right Ankle']),
+            "OC": Flyer3DState(-33.8, 8.9, 0.0, 128.0, head_turn_deg=-20, gaze_target="Point", right_grip="Point Left Ankle"),
+            "IC": Flyer3DState(39.8, 1.1, 0.0, 333.0, head_turn_deg=30, gaze_target="Tail", left_grip="Point Right Ankle"),
+            "Tail": Flyer3DState(5.1, -42.6, 0.0, 94.0, head_turn_deg=-30, gaze_target="IC", left_grip="IC Right Ankle"),
         },
         slot_details={
             "Point": SlotDetail("Point", COLOR_POINT, "Asymmetric Wing",

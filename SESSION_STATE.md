@@ -61,10 +61,11 @@
    - `.gitignore` angepasst, um Web-Dateien in `main` zu versionieren, während Scratch-Bilder/PDFs ignoriert bleiben.
    - GitHub Actions Workflow (`.github/workflows/deploy-pages.yml`) hinzugefügt für automatische Pages-Deployments bei Änderungen auf `main`.
    - Live-URL: `https://a-schalk.github.io/4wayscoring/`.
-12. **3D Webview Filter: On-Level-Formationen deaktivieren (`4way/index.html`):**
+12. **3D Webview Filter: On-Level-Formationen deaktivieren & Random D (Yuan) Point-Ausrichtung (`4way/index.html`, `src/formation_db.py`):**
    - Checkbox `On-Level-Formationen deaktivieren` (`#disableOnLevel`) im Steuerpanel der 3D-Web-App hinzugefügt (persistent via `localStorage`).
    - Blendet die `On Level`-Varianten der Blöcke 6, 11, 13, 18, 21 und 22 in der Einzelformations-Auswahl (`populateSelect`) aus und schaltet automatisch auf die `Vertical`-Variante desselben Blocks um.
    - Verwendet beim Parsen von Sprungkombinationen (`parseSequenceInput`) und beim Auslosen (`generateRandomDraw`) ausschließlich die `Vertical`-Varianten für diese Blöcke, sobald die Option aktiv ist.
+   - Formation D (Yuan): `localStorage`-Cache-Key in `4way/index.html` auf `fs4way-data-v2` aktualisiert (damit veraltete `fs4way-data-v1` Browser-Caches mit `-130°` nicht die korrigierte `50°` Point-Pose aus `4way/formations.js` überschreiben), `gh-pages` synchronisiert und `D` in `src/formation_db.py` (`Point` `310.0°` statt `133.0°`) angeglichen.
 
 ---
 
