@@ -61,11 +61,12 @@
    - `.gitignore` angepasst, um Web-Dateien in `main` zu versionieren, während Scratch-Bilder/PDFs ignoriert bleiben.
    - GitHub Actions Workflow (`.github/workflows/deploy-pages.yml`) hinzugefügt für automatische Pages-Deployments bei Änderungen auf `main`.
    - Live-URL: `https://a-schalk.github.io/4wayscoring/`.
-12. **3D Webview Filter: On-Level-Formationen deaktivieren & Random D (Yuan) Point-Ausrichtung (`4way/index.html`, `src/formation_db.py`):**
+12. **3D Webview Filter: On-Level-Formationen deaktivieren, Random D (Yuan) & Block 13 Front-Piece-Drehung (`4way/index.html`, `4way/formations.js`, `src/formation_db.py`):**
    - Checkbox `On-Level-Formationen deaktivieren` (`#disableOnLevel`) im Steuerpanel der 3D-Web-App hinzugefügt (persistent via `localStorage`).
    - Blendet die `On Level`-Varianten der Blöcke 6, 11, 13, 18, 21 und 22 in der Einzelformations-Auswahl (`populateSelect`) aus und schaltet automatisch auf die `Vertical`-Variante desselben Blocks um.
    - Verwendet beim Parsen von Sprungkombinationen (`parseSequenceInput`) und beim Auslosen (`generateRandomDraw`) ausschließlich die `Vertical`-Varianten für diese Blöcke, sobald die Option aktiv ist.
-   - Formation D (Yuan): `localStorage`-Cache-Key in `4way/index.html` auf `fs4way-data-v2` aktualisiert (damit veraltete `fs4way-data-v1` Browser-Caches mit `-130°` nicht die korrigierte `50°` Point-Pose aus `4way/formations.js` überschreiben), `gh-pages` synchronisiert und `D` in `src/formation_db.py` (`Point` `310.0°` statt `133.0°`) angeglichen.
+   - Formation D (Yuan): `localStorage`-Cache-Key in `4way/index.html` aktualisiert und `D` in `src/formation_db.py` (`Point` `310.0°` statt `133.0°`) angeglichen.
+   - Block 13 (`On Level` & `Vertical`): Im Front Piece (`["G", "R"]` statt `["R", "G"]`) Outside Center (`G`) analog zum Rear Piece (`["B", "Y"]`) als primäre Piece-Referenz gesetzt (`STORE_KEY = 'fs4way-data-v3'`). Dadurch wird keine fälschliche `+360°`-Zusatzdrehung (`k = 1` wegen `159°` Point-Eigendrehung) auf das Front Piece aufgeschlagen; OC dreht exakt ~309°–356° und P ~159°–207° (`<= 360°`).
 
 ---
 

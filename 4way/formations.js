@@ -948,7 +948,7 @@ window.FS_DATA = {
    "toName": "Mixed Accordion",
    "pieces": [
     {
-     "m": ["R", "G"],
+     "m": ["G", "R"],
      "rot": 360
     },
     {
@@ -1000,7 +1000,7 @@ window.FS_DATA = {
    "toName": "Mixed Accordion",
    "pieces": [
     {
-     "m": ["R", "G"],
+     "m": ["G", "R"],
      "rot": 360,
      "lift": 1
     },

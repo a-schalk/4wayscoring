@@ -344,6 +344,30 @@ def test_formation_3d_and_continuity_booklet():
     f_d = formation_db.get_formation("D")
     assert f_d.state_initial["Point"].heading_deg == 310.0
 
+    # Verify Block 13 Front Piece uses OC ("G") as primary reference and rotates <= 360°
+    def _wrap_deg(a):
+        a = ((a + 180) % 360 + 360) % 360 - 180
+        return 180 if a == -180 else a
+
+    def _seg_delta(h0, h1, d):
+        s = _wrap_deg(h1 - h0)
+        if not d or (1 if s > 0 else (-1 if s < 0 else 0)) == d or abs(s) < 45:
+            return s
+        return s + 360 * d
+
+    b13_list = [b for b in all_blocks if b["id"] == "13"]
+    assert len(b13_list) == 2
+    for b13 in b13_list:
+        front_piece = b13["pieces"][0]
+        assert front_piece["m"] == ["G", "R"]
+        frames = [b13["from"]] + [i["pose"] for i in b13.get("inters", [])] + [b13["to"]]
+        ref = front_piece["m"][0]
+        ds = [_seg_delta(frames[i][ref][2], frames[i + 1][ref][2], 1) for i in range(len(frames) - 1)]
+        diff = front_piece["rot"] - sum(ds)
+        k = round(diff / 360) if abs(diff) > 200 else 0
+        assert k == 0
+        assert 0 < sum(ds) <= 360
+
 
 def main():
     start = time.time()
