@@ -201,6 +201,12 @@
     <select id="sel"></select>
   </div>
 
+  <div style="margin: 6px 0 4px;">
+    <label title="Blöcke 6, 11, 13, 18, 21, 22 nur in der Vertical-Variante verwenden und On-Level-Varianten ausblenden">
+      <input id="disableOnLevel" type="checkbox"> On-Level-Formationen deaktivieren
+    </label>
+  </div>
+
   <div id="phase"></div>
   
   <div class="step-controls">
@@ -1091,12 +1097,19 @@ function buildSequenceTimeline(entries, pauseAtInters, loopEnabled) {
   return { phases, total: t, entries, isSequence: true };
 }
 
+const isOnLevelBlock = b => Boolean(b?.variant && /Level/i.test(b.variant));
+function getActiveBlocks() {
+  const disableOnLevel = document.getElementById('disableOnLevel')?.checked;
+  return disableOnLevel ? DATA.blocks.filter(b => !isOnLevelBlock(b)) : DATA.blocks;
+}
+
 // Parst Eingabetext in eine Liste von Randoms & Blöcken
 function parseSequenceInput(text) {
   if (!text) return { sequence: [], errors: [] };
   const tokens = text.trim().split(/[\s,;+\-]+/).filter(Boolean);
   const sequence = [];
   const errors = [];
+  const activeBlocks = getActiveBlocks();
 
   for (const raw of tokens) {
     const t = raw.toUpperCase();
@@ -1114,13 +1127,13 @@ function parseSequenceInput(text) {
 
       let blk = null;
       if (isVert) {
-        blk = DATA.blocks.find(b => b.id === num && /Vert/i.test(b.variant));
+        blk = activeBlocks.find(b => b.id === num && /Vert/i.test(b.variant));
       } else if (isLevel) {
-        blk = DATA.blocks.find(b => b.id === num && /Level/i.test(b.variant));
+        blk = activeBlocks.find(b => b.id === num && /Level/i.test(b.variant));
       }
       if (!blk) {
-        blk = DATA.blocks.find(b => b.id === num && (!b.variant || /Level/i.test(b.variant)))
-           || DATA.blocks.find(b => b.id === num);
+        blk = activeBlocks.find(b => b.id === num && (!b.variant || /Level/i.test(b.variant)))
+           || activeBlocks.find(b => b.id === num);
       }
       if (blk) {
         sequence.push({
@@ -1139,7 +1152,12 @@ function parseSequenceInput(text) {
 // Wettkampfrunde auslosen (5-6 Punkte FAI)
 function generateRandomDraw() {
   const rndPool = [...DATA.randoms];
-  const blkPool = DATA.blocks.filter(b => !b.variant || /Level/i.test(b.variant));
+  const seenBlockIds = new Set();
+  const blkPool = getActiveBlocks().filter(b => {
+    if (seenBlockIds.has(b.id)) return false;
+    seenBlockIds.add(b.id);
+    return true;
+  });
   const chosen = [];
   let points = 0;
 
@@ -1346,15 +1364,25 @@ function update(dt) {
 
 // ---------- UI Initialisierung ----------
 const sel = document.getElementById('sel');
+const disableOnLevelChk = document.getElementById('disableOnLevel');
+const ON_LEVEL_STORE_KEY = 'fs4way-disable-on-level';
+try {
+  if (localStorage.getItem(ON_LEVEL_STORE_KEY) === '1') {
+    disableOnLevelChk.checked = true;
+  }
+} catch { /* Standardwert */ }
+
 let items = [];
 const blockText = b => `${b.id}: ${b.fromName} – ${b.toName}${b.variant ? ' (' + b.variant + ')' : ''}`;
 const randomText = r => `${r.id}: ${r.name}`;
 const itemText = it => (it.pose ? randomText(it) : blockText(it));
 
 function populateSelect() {
+  const prevItem = items[sel.value] ?? current;
   sel.innerHTML = '';
   items = [];
-  for (const [label, list] of [['Blöcke', DATA.blocks], ['Randoms', DATA.randoms]]) {
+  const activeBlocks = getActiveBlocks();
+  for (const [label, list] of [['Blöcke', activeBlocks], ['Randoms', DATA.randoms]]) {
     const g = document.createElement('optgroup');
     g.label = label;
     for (const it of list) {
@@ -1363,6 +1391,13 @@ function populateSelect() {
       items.push(it); g.appendChild(o);
     }
     sel.appendChild(g);
+  }
+  if (prevItem) {
+    let idx = items.indexOf(prevItem);
+    if (idx === -1 && !prevItem.pose) {
+      idx = items.findIndex(it => !it.pose && it.id === prevItem.id);
+    }
+    if (idx !== -1) sel.value = idx;
   }
 }
 populateSelect();
@@ -1388,7 +1423,7 @@ function populateQuickButtons() {
   });
 
   const seenBlocks = new Set();
-  DATA.blocks.forEach(b => {
+  getActiveBlocks().forEach(b => {
     if (seenBlocks.has(b.id)) return;
     seenBlocks.add(b.id);
     const btn = document.createElement('button');
@@ -1405,6 +1440,20 @@ function populateQuickButtons() {
   });
 }
 populateQuickButtons();
+
+disableOnLevelChk.onchange = () => {
+  try {
+    localStorage.setItem(ON_LEVEL_STORE_KEY, disableOnLevelChk.checked ? '1' : '0');
+  } catch { /* ignorieren */ }
+  populateSelect();
+  populateQuickButtons();
+  if (currentMode === 'seq') {
+    loadSequence(document.getElementById('seqInput').value);
+  } else {
+    load(items[sel.value || 0]);
+    if (editing) { frameIdx = 0; refreshEditor(); }
+  }
+};
 
 // Tab Umschaltung
 document.getElementById('tabSeq').onclick = () => {

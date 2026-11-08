@@ -320,6 +320,26 @@ def test_formation_3d_and_continuity_booklet():
     p0_deg = f_b12.state_initial["Point"].heading_deg
     assert abs((states_b12_mid["Point"].heading_deg - p0_deg - 270.0) % 360.0) < 1.0
 
+    # 6. Verify 3D Webview (4way/index.html & 4way/formations.js) On-Level filter support
+    web_html_path = os.path.join(PROJECT_ROOT, "4way", "index.html")
+    web_js_path = os.path.join(PROJECT_ROOT, "4way", "formations.js")
+    assert os.path.isfile(web_html_path) and os.path.isfile(web_js_path)
+    with open(web_html_path, "r", encoding="utf-8") as fh:
+        html_content = fh.read()
+    assert 'id="disableOnLevel"' in html_content
+    assert "getActiveBlocks()" in html_content
+    assert "isOnLevelBlock" in html_content
+    import json, re
+    with open(web_js_path, "r", encoding="utf-8") as fj:
+        js_text = fj.read()
+    json_str = re.sub(r"^[\s\S]*?window\.FS_DATA\s*=\s*", "", js_text).rstrip().rstrip(";")
+    fs_data = json.loads(json_str)
+    all_blocks = fs_data["blocks"]
+    non_on_level = [b for b in all_blocks if not re.search(r"Level", b.get("variant", ""), re.I)]
+    assert len(all_blocks) == 28
+    assert len(non_on_level) == 22
+    assert len({b["id"] for b in non_on_level}) == 22
+
 
 def main():
     start = time.time()

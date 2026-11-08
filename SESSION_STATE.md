@@ -5,11 +5,11 @@
 ---
 
 ## 📌 Snapshot
-- **Last Updated:** 2026-10-03
-- **Git Commit:** `a01019d` (Synced with `origin/main` on GitHub: `git@github.com:a-schalk/4wayscoring.git`)
+- **Last Updated:** 2026-11-08
+- **Git Commit:** Synced with `origin/main` on GitHub: `git@github.com:a-schalk/4wayscoring.git`
 - **Active Branch:** `main` (tracking `origin/main`)
 - **Working Tree:** Clean
-- **Test Status:** ✅ 7/7 Test suites passing in 0.50s (`python3 tests/run_tests.py`)
+- **Test Status:** ✅ 7/7 Test suites passing (`python3 tests/run_tests.py`)
 
 ---
 
@@ -61,6 +61,10 @@
    - `.gitignore` angepasst, um Web-Dateien in `main` zu versionieren, während Scratch-Bilder/PDFs ignoriert bleiben.
    - GitHub Actions Workflow (`.github/workflows/deploy-pages.yml`) hinzugefügt für automatische Pages-Deployments bei Änderungen auf `main`.
    - Live-URL: `https://a-schalk.github.io/4wayscoring/`.
+12. **3D Webview Filter: On-Level-Formationen deaktivieren (`4way/index.html`):**
+   - Checkbox `On-Level-Formationen deaktivieren` (`#disableOnLevel`) im Steuerpanel der 3D-Web-App hinzugefügt (persistent via `localStorage`).
+   - Blendet die `On Level`-Varianten der Blöcke 6, 11, 13, 18, 21 und 22 in der Einzelformations-Auswahl (`populateSelect`) aus und schaltet automatisch auf die `Vertical`-Variante desselben Blocks um.
+   - Verwendet beim Parsen von Sprungkombinationen (`parseSequenceInput`) und beim Auslosen (`generateRandomDraw`) ausschließlich die `Vertical`-Varianten für diese Blöcke, sobald die Option aktiv ist.
 
 ---
 
